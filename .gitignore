@@ -17,6 +17,18 @@
 /.next/
 /out/
 
+# HALO local document storage
+/.halo-documents/
+
+# HALO local manual memory storage
+/.halo-memory/
+
+# HALO private exports and local runtime logs
+/private-exports/
+/exports/private/
+/logs/
+*.local.log
+
 # production
 /build
 
@@ -39,11 +51,3 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# Public export safety
-node_modules/
-.next/
-.env
-.env.*
-*.log
-.DS_Store
