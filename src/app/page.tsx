@@ -1667,7 +1667,7 @@ export default function Home() {
           <dl>
             <div>
               <dt>Node</dt>
-              <dd>halo-ai-node</dd>
+              <dd>local-node</dd>
             </div>
             <div>
               <dt>Mode</dt>
