@@ -414,17 +414,19 @@ export default function Home() {
   const [documentMatches, setDocumentMatches] = useState<DocumentQueryMatch[]>([]);
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const [isQueryingDocuments, setIsQueryingDocuments] = useState(false);
+  const [expandedDocumentIds, setExpandedDocumentIds] = useState<string[]>([]);
   const [memories, setMemories] = useState<MemoryEntry[]>([]);
   const [memoryType, setMemoryType] = useState<MemoryEntry["type"]>("project");
   const [memoryTitle, setMemoryTitle] = useState("");
   const [memoryContent, setMemoryContent] = useState("");
   const [memoryStatus, setMemoryStatus] = useState(
-    "Manual local memory only. Selected memory is used only when the chat toggle is on."
+    "Manual local memory only; chat uses selected entries only when enabled."
   );
   const [memorySearch, setMemorySearch] = useState("");
   const [memoryTypeFilter, setMemoryTypeFilter] =
     useState<MemoryTypeFilter>("all");
   const [selectedMemoryIds, setSelectedMemoryIds] = useState<string[]>([]);
+  const [expandedMemoryIds, setExpandedMemoryIds] = useState<string[]>([]);
   const [useSelectedMemory, setUseSelectedMemory] = useState(false);
   const [isSavingMemory, setIsSavingMemory] = useState(false);
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
@@ -617,6 +619,22 @@ export default function Home() {
   function clearSelectedMemories() {
     setSelectedMemoryIds([]);
     setUseSelectedMemory(false);
+  }
+
+  function toggleDocumentDetails(id: string) {
+    setExpandedDocumentIds((current) =>
+      current.includes(id)
+        ? current.filter((documentId) => documentId !== id)
+        : [...current, id]
+    );
+  }
+
+  function toggleMemoryDetails(id: string) {
+    setExpandedMemoryIds((current) =>
+      current.includes(id)
+        ? current.filter((memoryId) => memoryId !== id)
+        : [...current, id]
+    );
   }
 
   async function uploadSelectedDocument(event: ChangeEvent<HTMLInputElement>) {
@@ -1218,6 +1236,7 @@ export default function Home() {
 
           <div className="document-actions">
             <input
+              className="document-file-input"
               ref={fileInputRef}
               type="file"
               accept=".txt,.md,.log,.pdf,text/plain,text/markdown,application/pdf"
@@ -1239,42 +1258,66 @@ export default function Home() {
               <div className="document-empty">
                 <strong>No local documents uploaded.</strong>
                 <p>
-                  Supported formats: TXT, MD, LOG, PDF. Extractable text is
-                  chunked locally for context; scanned PDFs require OCR, which
-                  is not implemented yet.
+                  TXT, MD, LOG, PDF. Text is chunked locally; scanned PDFs need OCR.
                 </p>
               </div>
             ) : (
-              documents.map((document) => (
-                <article
-                  className={`document-row ${document.chunkCount === 0 ? "empty" : ""}`}
-                  key={document.id}
-                >
-                  <div className="document-details">
-                    <strong title={document.filename}>{document.filename}</strong>
-                    <dl>
-                      <div>
-                        <dt>Type</dt>
-                        <dd>{documentTypeLabel(document.type)}</dd>
+              documents.map((document) => {
+                const isExpanded = expandedDocumentIds.includes(document.id);
+
+                return (
+                  <article
+                    className={`document-row ${
+                      document.chunkCount === 0 ? "empty" : ""
+                    } ${isExpanded ? "expanded" : ""}`}
+                    key={document.id}
+                    tabIndex={0}
+                  >
+                    <div className="document-summary">
+                      <strong title={document.filename}>{document.filename}</strong>
+                      <div className="document-meta" aria-label="Document metadata">
+                        <span>{documentTypeLabel(document.type)}</span>
+                        <span>{documentChunkLabel(document.chunkCount)}</span>
+                        <span>{formatShortDate(document.createdAt)}</span>
                       </div>
-                      <div>
-                        <dt>Chunks</dt>
-                        <dd>{documentChunkLabel(document.chunkCount)}</dd>
-                      </div>
-                      <div>
-                        <dt>Created</dt>
-                        <dd>{formatShortDate(document.createdAt)}</dd>
-                      </div>
-                    </dl>
-                    <p className="document-readiness">
-                      {documentReadinessMessage(document)}
-                    </p>
-                  </div>
-                  <button onClick={() => deleteDocument(document.id, document.filename)}>
-                    Delete
-                  </button>
-                </article>
-              ))
+                    </div>
+                    <div className="document-card-actions">
+                      <button
+                        type="button"
+                        aria-expanded={isExpanded}
+                        onClick={() => toggleDocumentDetails(document.id)}
+                      >
+                        {isExpanded ? "Hide" : "Details"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteDocument(document.id, document.filename)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                    <div className="document-details">
+                      <dl>
+                        <div>
+                          <dt>Type</dt>
+                          <dd>{documentTypeLabel(document.type)}</dd>
+                        </div>
+                        <div>
+                          <dt>Chunks</dt>
+                          <dd>{documentChunkLabel(document.chunkCount)}</dd>
+                        </div>
+                        <div>
+                          <dt>Created</dt>
+                          <dd>{formatShortDate(document.createdAt)}</dd>
+                        </div>
+                      </dl>
+                      <p className="document-readiness">
+                        {documentReadinessMessage(document)}
+                      </p>
+                    </div>
+                  </article>
+                );
+              })
             )}
           </div>
 
@@ -1318,8 +1361,7 @@ export default function Home() {
           </div>
 
           <p className="memory-disclosure">
-            Memory is preview-only unless USE SELECTED MEMORY is enabled with
-            selected entries. No automatic memory capture. Do not store secrets.
+            Manual only. Selected entries are sent only when enabled. Do not store secrets.
           </p>
           <p className="memory-status">{memoryStatus}</p>
 
@@ -1418,9 +1460,7 @@ export default function Home() {
               <div className="memory-empty">
                 <strong>No manual memories saved.</strong>
                 <p>
-                  Add short curated notes only when you explicitly want local
-                  memory. Do not store secrets, paths, private keys, tokens, or
-                  full chat transcripts.
+                  Add short curated notes only. Avoid secrets, keys, tokens, and transcripts.
                 </p>
               </div>
             ) : visibleMemories.length === 0 ? (
@@ -1436,10 +1476,15 @@ export default function Home() {
                 const isEditing = editingMemoryId === memory.id;
                 const isSelected = selectedMemoryIds.includes(memory.id);
 
+                const isExpanded = expandedMemoryIds.includes(memory.id);
+
                 return (
                   <article
-                    className={`memory-row ${isSelected ? "selected" : ""}`}
+                    className={`memory-row ${isSelected ? "selected" : ""} ${
+                      isExpanded ? "expanded" : ""
+                    }`}
                     key={memory.id}
+                    tabIndex={isEditing ? undefined : 0}
                   >
                     {isEditing ? (
                       <form
@@ -1515,27 +1560,47 @@ export default function Home() {
                         </label>
                         <div className="memory-details">
                           <div className="memory-meta">
-                            <span>Type: {memoryTypeLabel(memory.type)}</span>
-                            <span>Source: manual</span>
+                            <span>{memoryTypeLabel(memory.type)}</span>
                           </div>
-                          <strong>{memory.title}</strong>
-                          <p>{memory.content}</p>
-                          <dl className="memory-dates">
-                            <div>
-                              <dt>Created</dt>
-                              <dd>{formatMemoryDate(memory.createdAt)}</dd>
-                            </div>
-                            <div>
-                              <dt>Updated</dt>
-                              <dd>{formatMemoryDate(memory.updatedAt)}</dd>
-                            </div>
-                          </dl>
+                          <strong title={memory.title}>{memory.title}</strong>
+                          <p
+                            className="memory-preview-line"
+                            title={previewText(memory.content, 220)}
+                          >
+                            {previewText(memory.content, 180)}
+                          </p>
+                          <div className="memory-full-details">
+                            <p>{memory.content}</p>
+                            <dl className="memory-dates">
+                              <div>
+                                <dt>Created</dt>
+                                <dd>{formatMemoryDate(memory.createdAt)}</dd>
+                              </div>
+                              <div>
+                                <dt>Updated</dt>
+                                <dd>{formatMemoryDate(memory.updatedAt)}</dd>
+                              </div>
+                            </dl>
+                          </div>
                         </div>
                         <div className="memory-actions">
-                          <button onClick={() => startEditingMemory(memory)}>
+                          <button
+                            type="button"
+                            aria-expanded={isExpanded}
+                            onClick={() => toggleMemoryDetails(memory.id)}
+                          >
+                            {isExpanded ? "Hide" : "Details"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => startEditingMemory(memory)}
+                          >
                             Edit
                           </button>
-                          <button onClick={() => deleteMemory(memory.id, memory.title)}>
+                          <button
+                            type="button"
+                            onClick={() => deleteMemory(memory.id, memory.title)}
+                          >
                             Delete
                           </button>
                         </div>
@@ -1576,8 +1641,12 @@ export default function Home() {
                     className="history-actions"
                     aria-label={`${session.title} actions`}
                   >
-                    <button onClick={() => renameChat(session.id)}>Rename</button>
-                    <button onClick={() => deleteChat(session.id)}>Delete</button>
+                    <button type="button" onClick={() => renameChat(session.id)}>
+                      Rename
+                    </button>
+                    <button type="button" onClick={() => deleteChat(session.id)}>
+                      Delete
+                    </button>
                   </div>
                 </article>
               ))
@@ -1598,7 +1667,7 @@ export default function Home() {
           <dl>
             <div>
               <dt>Node</dt>
-              <dd>halo-ai-node</dd>
+              <dd>local-node</dd>
             </div>
             <div>
               <dt>Mode</dt>
@@ -1610,7 +1679,7 @@ export default function Home() {
             </div>
             <div>
               <dt>Version</dt>
-              <dd>v0.6-public-preview</dd>
+              <dd>v0.6.7-public-preview</dd>
             </div>
           </dl>
         </section>
