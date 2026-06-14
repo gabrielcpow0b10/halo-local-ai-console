@@ -10,6 +10,10 @@ This branch is prepared as a sanitized `v0.6-public-preview` candidate. It docum
 
 Public preview notes: [docs/PUBLIC_RELEASE_NOTES_V0_6_PREVIEW.md](docs/PUBLIC_RELEASE_NOTES_V0_6_PREVIEW.md).
 
+v0.6.6 local UI note: the sidebar uses compact Documents, Memory, and Saved Chats cards with hover, focus, and click-to-toggle details. This is a UI polish update only; it does not change APIs, security boundaries, runtime storage, or dependencies.
+
+Compact sidebar notes: [docs/HALO_CONSOLE_V0_6_6_COMPACT_SIDEBAR.md](docs/HALO_CONSOLE_V0_6_6_COMPACT_SIDEBAR.md).
+
 ## Local Architecture
 
 - Browser UI: Next.js App Router page at `/`
