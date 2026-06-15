@@ -38,6 +38,10 @@ v0.7.5-local note: PDF extraction quality scoring is recalibrated for course doc
 
 PDF extraction quality calibration notes: [docs/HALO_CONSOLE_V0_7_5_PDF_EXTRACTION_QUALITY_CALIBRATION.md](docs/HALO_CONSOLE_V0_7_5_PDF_EXTRACTION_QUALITY_CALIBRATION.md).
 
+v0.7.6-local note: the Documents panel now supports selected document scope. `Use Local Docs` enables local document retrieval, while `Use Selected Docs` limits retrieval to selected local documents only and returns a safe no-selection message when enabled with zero selected documents.
+
+Selected document scope notes: [docs/HALO_CONSOLE_V0_7_6_SELECTED_DOCUMENT_SCOPE.md](docs/HALO_CONSOLE_V0_7_6_SELECTED_DOCUMENT_SCOPE.md).
+
 ## Local Architecture
 
 - Browser UI: Next.js App Router page at `/`
@@ -80,6 +84,8 @@ HALO Console supports local document upload for `.txt`, `.md`, `.log`, and `.pdf
 Scanned or image-only PDFs are accepted as local document records, but they produce no chunks and show: `This PDF appears to contain no extractable text. OCR is not implemented yet.`
 
 When `Use Local Docs` is enabled, chat retrieves a small capped set of matching readable chunks and injects them as labeled local document context. It does not inject entire documents or low-quality extracted text.
+
+When `Use Selected Docs` is enabled with `Use Local Docs`, chat searches only the selected readable local documents. If selected scope is enabled with no selected documents, HALO reports that no documents are selected and injects no document context.
 
 If local documents exist but no chunks match a question, HALO Console reports that documents are available but no relevant chunks matched, and suggests using document-title terms or the Documents query box.
 
@@ -180,6 +186,7 @@ ollama run qwen3:14b
 - Learning Layer API requests use learning note ids, not local filesystem paths.
 - Manual learning notes are curated user-provided note data; do not store secrets, tokens, passwords, private keys, private paths, or full chat transcripts.
 - Main chat local-docs context is opt-in per browser session with `Use Local Docs`.
+- Selected document scope is opt-in per browser session with `Use Selected Docs` and uses document ids, not filesystem paths.
 - Main chat document context is limited to a small number of retrieved chunks, not entire documents.
 - Main chat selected learning context is opt-in and limited to selected visible learning notes.
 - Browser chat history stays in `localStorage` on the client that used the app.

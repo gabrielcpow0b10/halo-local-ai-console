@@ -9,6 +9,8 @@ type ChatMessage = {
     enabled: boolean;
     usedChunks: number;
     status?: LocalDocumentStatus;
+    selectedScope?: boolean;
+    selectedCount?: number;
     sources?: string[];
     chunks?: LocalDocumentSourceChunk[];
   };
@@ -73,6 +75,8 @@ type LocalDocumentStatus =
   | "used"
   | "no_match"
   | "found_no_readable_chunks"
+  | "selected_no_match"
+  | "selected_empty_selection"
   | "empty";
 
 type LocalDocumentSourceChunk = {
@@ -381,6 +385,8 @@ function parseLocalDocumentStatus(value: string | null): LocalDocumentStatus {
     value === "used" ||
     value === "no_match" ||
     value === "found_no_readable_chunks" ||
+    value === "selected_no_match" ||
+    value === "selected_empty_selection" ||
     value === "empty"
   ) {
     return value;
@@ -471,10 +477,18 @@ function renderLocalDocumentSources(localDocs: NonNullable<ChatMessage["localDoc
     localDocs.sources && localDocs.sources.length > 0
       ? ` - ${localDocs.sources.map(safeSourceLabel).join("; ")}`
       : "";
+  const selectedHint =
+    localDocs.selectedScope && (localDocs.selectedCount ?? 0) > 0
+      ? ` · SELECTED DOCS: ${localDocs.selectedCount}`
+      : "";
   const searchedLabel =
-    localDocs.status === "found_no_readable_chunks"
-      ? "LOCAL DOCS SEARCHED: DOCUMENT FOUND, BUT NO READABLE CHUNKS USED"
-      : "LOCAL DOCS SEARCHED: NO CHUNKS USED";
+    localDocs.status === "selected_no_match"
+      ? "LOCAL DOCS SEARCHED: SELECTED DOCUMENTS, NO RELEVANT READABLE CHUNKS USED"
+      : localDocs.status === "selected_empty_selection"
+        ? "LOCAL DOCS SEARCHED: SELECTED DOCUMENTS, NO DOCUMENTS SELECTED"
+        : localDocs.status === "found_no_readable_chunks"
+          ? "LOCAL DOCS SEARCHED: DOCUMENT FOUND, BUT NO READABLE CHUNKS USED"
+          : "LOCAL DOCS SEARCHED: NO CHUNKS USED";
 
   return (
     <div className="local-docs-context">
@@ -486,7 +500,7 @@ function renderLocalDocumentSources(localDocs: NonNullable<ChatMessage["localDoc
         }
       >
         {localDocs.usedChunks > 0
-          ? `LOCAL DOCS USED: ${localDocs.usedChunks} CHUNKS`
+          ? `LOCAL DOCS USED: ${localDocs.usedChunks} CHUNKS${selectedHint}`
           : searchedLabel}
         {sourceHint}
       </div>
@@ -569,6 +583,7 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [webSearchEnabled, setWebSearchEnabled] = useState(false);
   const [localDocumentsEnabled, setLocalDocumentsEnabled] = useState(false);
+  const [useSelectedDocuments, setUseSelectedDocuments] = useState(false);
   const [webSearchState, setWebSearchState] = useState<WebSearchState>("checking");
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [documentStatus, setDocumentStatus] = useState("No documents loaded.");
@@ -577,6 +592,7 @@ export default function Home() {
   const [isUploadingDocument, setIsUploadingDocument] = useState(false);
   const [isQueryingDocuments, setIsQueryingDocuments] = useState(false);
   const [expandedDocumentIds, setExpandedDocumentIds] = useState<string[]>([]);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [memories, setMemories] = useState<MemoryEntry[]>([]);
   const [memoryType, setMemoryType] = useState<MemoryEntry["type"]>("project_note");
   const [memoryTitle, setMemoryTitle] = useState("");
@@ -615,6 +631,11 @@ export default function Home() {
       ? models
       : [{ name: DEFAULT_MODEL, size: 0, modified_at: "" }];
   const savedSessions = useMemo(() => sessions.filter(isSavedSession), [sessions]);
+  const selectedDocuments = useMemo(() => {
+    const selectedIds = new Set(selectedDocumentIds);
+    return documents.filter((document) => selectedIds.has(document.id));
+  }, [documents, selectedDocumentIds]);
+  const selectedDocumentCount = selectedDocuments.length;
   const visibleMemories = useMemo(() => {
     const query = memorySearch.trim().toLowerCase();
 
@@ -738,6 +759,11 @@ export default function Home() {
       const nextDocuments = Array.isArray(data.documents) ? data.documents : [];
 
       setDocuments(nextDocuments);
+      setSelectedDocumentIds((current) =>
+        current.filter((id) =>
+          nextDocuments.some((document: DocumentRecord) => document.id === id)
+        )
+      );
       setDocumentStatus(
         nextDocuments.length > 0
           ? `${nextDocuments.length} local document${nextDocuments.length === 1 ? "" : "s"} ready.`
@@ -784,6 +810,19 @@ export default function Home() {
   function clearSelectedMemories() {
     setSelectedMemoryIds([]);
     setUseSelectedMemory(false);
+  }
+
+  function toggleDocumentSelection(id: string) {
+    setSelectedDocumentIds((current) =>
+      current.includes(id)
+        ? current.filter((documentId) => documentId !== id)
+        : [...current, id]
+    );
+  }
+
+  function clearSelectedDocuments() {
+    setSelectedDocumentIds([]);
+    setUseSelectedDocuments(false);
   }
 
   function toggleDocumentDetails(id: string) {
@@ -855,6 +894,10 @@ export default function Home() {
 
       setDocumentStatus("Document deleted.");
       setDocumentMatches([]);
+      setSelectedDocumentIds((current) => current.filter((documentId) => documentId !== id));
+      if (selectedDocumentIds.includes(id) && selectedDocumentCount <= 1) {
+        setUseSelectedDocuments(false);
+      }
       await refreshDocuments();
     } catch (error) {
       setDocumentStatus(
@@ -1189,6 +1232,11 @@ export default function Home() {
     };
     const nextMessages = [...activeSession.messages, userMessage];
     const shouldUseLocalDocuments = localDocumentsEnabled;
+    const shouldUseSelectedDocuments =
+      shouldUseLocalDocuments && useSelectedDocuments;
+    const selectedDocumentIdsForChat = shouldUseSelectedDocuments
+      ? selectedDocuments.map((document) => document.id)
+      : [];
     const selectedMemoryIdsForChat = shouldUseSelectedMemory
       ? selectedMemories.map((memory) => memory.id)
       : [];
@@ -1217,6 +1265,8 @@ export default function Home() {
           messages: nextMessages,
           webSearch: shouldUseWebSearch,
           localDocuments: shouldUseLocalDocuments,
+          useSelectedDocuments: shouldUseSelectedDocuments,
+          selectedDocumentIds: selectedDocumentIdsForChat,
           useSelectedMemory: shouldUseSelectedMemory,
           selectedMemoryIds: selectedMemoryIdsForChat,
         }),
@@ -1230,6 +1280,11 @@ export default function Home() {
         const usedChunks = Number(response.headers.get("X-HALO-Local-Docs-Used") ?? "0");
         const localDocumentStatus = parseLocalDocumentStatus(
           response.headers.get("X-HALO-Local-Docs-Status")
+        );
+        const selectedScope =
+          response.headers.get("X-HALO-Local-Docs-Selected-Scope") === "true";
+        const selectedCount = Number(
+          response.headers.get("X-HALO-Local-Docs-Selected-Count") ?? "0"
         );
         const sources = parseLocalDocumentSources(
           response.headers.get("X-HALO-Local-Docs-Sources")
@@ -1248,6 +1303,8 @@ export default function Home() {
               enabled: true,
               usedChunks: Number.isFinite(usedChunks) ? usedChunks : 0,
               status: localDocumentStatus,
+              selectedScope,
+              selectedCount: Number.isFinite(selectedCount) ? selectedCount : 0,
               sources,
               chunks,
             },
@@ -1409,9 +1466,14 @@ export default function Home() {
         <section className="sidebar-section documents-box" aria-label="Documents">
           <div className="section-heading">
             <p className="section-title">Documents</p>
-            <span aria-label={`${documents.length} uploaded local documents`}>
-              {documents.length} doc{documents.length === 1 ? "" : "s"}
-            </span>
+            <div className="section-counts">
+              <span aria-label={`${documents.length} uploaded local documents`}>
+                {documents.length} doc{documents.length === 1 ? "" : "s"}
+              </span>
+              <span aria-label={`${selectedDocumentCount} selected local documents`}>
+                {selectedDocumentCount} selected
+              </span>
+            </div>
           </div>
 
           <div className="document-actions">
@@ -1429,6 +1491,13 @@ export default function Home() {
             >
               {isUploadingDocument ? "Uploading" : "Upload"}
             </button>
+            <button
+              className="compact-button muted-action"
+              onClick={clearSelectedDocuments}
+              disabled={selectedDocumentCount === 0}
+            >
+              Clear selection
+            </button>
           </div>
 
           <p className="document-status">{documentStatus}</p>
@@ -1444,6 +1513,7 @@ export default function Home() {
             ) : (
               documents.map((document) => {
                 const isExpanded = expandedDocumentIds.includes(document.id);
+                const isSelected = selectedDocumentIds.includes(document.id);
                 const readinessMessage = documentReadinessMessage(document);
                 const isLowQualityExtraction =
                   document.extractionStatus === "low_quality";
@@ -1459,10 +1529,20 @@ export default function Home() {
 
                 return (
                   <article
-                    className={`document-row ${isExpanded ? "expanded" : ""}`}
+                    className={`document-row ${isSelected ? "selected" : ""} ${
+                      isExpanded ? "expanded" : ""
+                    }`}
                     key={document.id}
                     tabIndex={0}
                   >
+                    <label className="document-select">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleDocumentSelection(document.id)}
+                      />
+                      <span>Select</span>
+                    </label>
                     <div className="document-card-main">
                       <div className="document-summary">
                         <div className="document-title-row">
@@ -1957,7 +2037,7 @@ export default function Home() {
             </div>
             <div>
               <dt>Version</dt>
-              <dd>v0.7.5-local</dd>
+              <dd>v0.7.6-local</dd>
             </div>
           </dl>
         </section>
@@ -2029,6 +2109,19 @@ export default function Home() {
                 onChange={(event) => setLocalDocumentsEnabled(event.target.checked)}
               />
               <span>USE LOCAL DOCS</span>
+            </label>
+            <label
+              className={`search-toggle selected-docs-toggle ${
+                localDocumentsEnabled ? "" : "inactive"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={useSelectedDocuments}
+                disabled={!localDocumentsEnabled}
+                onChange={(event) => setUseSelectedDocuments(event.target.checked)}
+              />
+              <span>USE SELECTED DOCS ({selectedDocumentCount} selected)</span>
             </label>
             <label
               className={`search-toggle memory-chat-toggle ${
