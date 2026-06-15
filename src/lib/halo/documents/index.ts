@@ -1184,7 +1184,11 @@ export async function deleteDocument(idInput: unknown) {
   return document;
 }
 
-export async function queryDocuments(questionInput: unknown, limitInput: unknown = 5) {
+export async function queryDocuments(
+  questionInput: unknown,
+  limitInput: unknown = 5,
+  selectedDocumentIdsInput?: unknown
+) {
   if (typeof questionInput !== "string" || questionInput.trim().length < 2) {
     throw new HaloDocumentError("Question must be at least 2 characters.");
   }
@@ -1197,13 +1201,21 @@ export async function queryDocuments(questionInput: unknown, limitInput: unknown
   const queryTerms = tokenize(trimmedQuestion);
   const queryExerciseRefs = extractExerciseRefs(trimmedQuestion);
   const queryIdentifiers = extractIdentifiers(trimmedQuestion);
-  const documents = await listDocuments();
+  const selectedDocumentIds = Array.isArray(selectedDocumentIdsInput)
+    ? new Set(selectedDocumentIdsInput.map(assertSafeId))
+    : null;
+  const allDocuments = await listDocuments();
+  const documents = selectedDocumentIds
+    ? allDocuments.filter((document) => selectedDocumentIds.has(document.id))
+    : allDocuments;
 
   if (queryTerms.size === 0 && queryExerciseRefs.size === 0 && queryIdentifiers.size === 0) {
     return {
       question: trimmedQuestion,
       matches: [] as HaloDocumentQueryResult[],
       documentCount: documents.length,
+      totalDocumentCount: allDocuments.length,
+      selectedDocumentCount: selectedDocumentIds?.size,
       answer:
         documents.length > 0
           ? "Local documents are available, but no relevant chunks matched this question. Try asking with terms from the document title or use the Documents query box."
@@ -1300,6 +1312,8 @@ export async function queryDocuments(questionInput: unknown, limitInput: unknown
     question: trimmedQuestion,
     matches: returnedMatches,
     documentCount: documents.length,
+    totalDocumentCount: allDocuments.length,
+    selectedDocumentCount: selectedDocumentIds?.size,
     matchingDocumentCount,
     lowQualityMatchCount,
     foundDocumentWithoutReadableChunks,

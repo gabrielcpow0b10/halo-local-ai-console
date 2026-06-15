@@ -21,6 +21,10 @@ const LOCAL_DOCS_NO_READABLE_CHUNKS_RESPONSE =
   "The document was found, but no readable chunks were available for this question.";
 const LOCAL_DOCS_EMPTY_RESPONSE =
   "No local documents are uploaded yet. Upload a document first or turn off Use Local Docs.";
+const SELECTED_DOCS_EMPTY_SELECTION_RESPONSE =
+  "Selected docs is enabled, but no documents are selected.";
+const SELECTED_DOCS_NO_MATCH_RESPONSE =
+  "Local selected documents were searched, but no relevant readable chunks were used.";
 
 type ChatRequestBody = {
   model?: unknown;
@@ -29,6 +33,8 @@ type ChatRequestBody = {
   allowTools?: unknown;
   webSearch?: unknown;
   localDocuments?: unknown;
+  useSelectedDocuments?: unknown;
+  selectedDocumentIds?: unknown;
   useSelectedMemory?: unknown;
   selectedMemoryIds?: unknown;
 };
@@ -101,7 +107,9 @@ function buildLocalDocumentContext(
 
 function localDocumentHeaders(
   matches: Awaited<ReturnType<typeof queryDocuments>>["matches"],
-  status = "used"
+  status = "used",
+  selectedDocumentCount = 0,
+  selectedDocumentScope = false
 ) {
   const sources = Array.from(new Set(matches.map((match) => match.filename))).slice(0, 3);
   const chunks = matches.slice(0, 4).map((match) => ({
@@ -117,9 +125,20 @@ function localDocumentHeaders(
   return {
     "X-HALO-Local-Docs-Used": String(matches.length),
     "X-HALO-Local-Docs-Status": status,
+    "X-HALO-Local-Docs-Selected-Scope": selectedDocumentScope ? "true" : "false",
+    "X-HALO-Local-Docs-Selected-Count": String(selectedDocumentCount),
     "X-HALO-Local-Docs-Sources": encodeURIComponent(JSON.stringify(sources)),
     "X-HALO-Local-Docs-Chunks": encodeURIComponent(JSON.stringify(chunks)),
   };
+}
+
+function getSelectedDocumentIds(input: unknown) {
+  if (!Array.isArray(input)) return [];
+
+  return input.filter(
+    (item): item is string =>
+      typeof item === "string" && /^[a-f0-9-]{36}$/.test(item)
+  );
 }
 
 function createStreamingTextResponse(text: string, headers?: Record<string, string>) {
@@ -151,6 +170,8 @@ export async function POST(req: Request) {
     const shouldUseRouter = body.router === true;
     const webSearchEnabled = body.webSearch === true;
     const localDocumentsEnabled = body.localDocuments === true;
+    const selectedDocumentScopeEnabled = body.useSelectedDocuments === true;
+    const selectedDocumentIds = getSelectedDocumentIds(body.selectedDocumentIds);
     const selectedLearningEntries =
       body.useSelectedMemory === true
         ? await getSelectedLearningMemories(body.selectedMemoryIds)
@@ -177,23 +198,47 @@ export async function POST(req: Request) {
     let localDocumentHeaderValues = {
       "X-HALO-Local-Docs-Used": "0",
       "X-HALO-Local-Docs-Status": "not_searched",
+      "X-HALO-Local-Docs-Selected-Scope": "false",
+      "X-HALO-Local-Docs-Selected-Count": "0",
       "X-HALO-Local-Docs-Sources": encodeURIComponent(JSON.stringify([])),
       "X-HALO-Local-Docs-Chunks": encodeURIComponent(JSON.stringify([])),
     };
 
     if (localDocumentsEnabled) {
-      const localDocumentResult = await queryDocuments(latestQuestion, 4);
+      if (selectedDocumentScopeEnabled && selectedDocumentIds.length === 0) {
+        localDocumentHeaderValues = localDocumentHeaders(
+          [],
+          "selected_empty_selection",
+          0,
+          true
+        );
+
+        return createStreamingTextResponse(
+          SELECTED_DOCS_EMPTY_SELECTION_RESPONSE,
+          localDocumentHeaderValues
+        );
+      }
+
+      const localDocumentResult = await queryDocuments(
+        latestQuestion,
+        4,
+        selectedDocumentScopeEnabled ? selectedDocumentIds : undefined
+      );
       const localDocumentStatus =
         localDocumentResult.matches.length > 0
           ? "used"
-          : localDocumentResult.foundDocumentWithoutReadableChunks
-            ? "found_no_readable_chunks"
-            : localDocumentResult.documentCount > 0
-              ? "no_match"
-              : "empty";
+          : selectedDocumentScopeEnabled
+            ? "selected_no_match"
+            : localDocumentResult.foundDocumentWithoutReadableChunks
+              ? "found_no_readable_chunks"
+              : localDocumentResult.documentCount > 0
+                ? "no_match"
+                : "empty";
       localDocumentHeaderValues = localDocumentHeaders(
         localDocumentResult.matches,
-        localDocumentStatus
+        localDocumentStatus,
+        selectedDocumentScopeEnabled ? selectedDocumentIds.length : 0,
+        selectedDocumentScopeEnabled
       );
 
       if (localDocumentResult.matches.length > 0) {
@@ -204,6 +249,11 @@ export async function POST(req: Request) {
       } else if (localDocumentResult.foundDocumentWithoutReadableChunks) {
         return createStreamingTextResponse(
           LOCAL_DOCS_NO_READABLE_CHUNKS_RESPONSE,
+          localDocumentHeaderValues
+        );
+      } else if (selectedDocumentScopeEnabled) {
+        return createStreamingTextResponse(
+          SELECTED_DOCS_NO_MATCH_RESPONSE,
           localDocumentHeaderValues
         );
       } else if (localDocumentResult.documentCount > 0) {
