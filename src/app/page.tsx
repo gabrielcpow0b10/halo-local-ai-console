@@ -8,6 +8,7 @@ type ChatMessage = {
   localDocs?: {
     enabled: boolean;
     usedChunks: number;
+    status?: LocalDocumentStatus;
     sources?: string[];
     chunks?: LocalDocumentSourceChunk[];
   };
@@ -39,32 +40,62 @@ type DocumentRecord = {
   bytes: number;
   createdAt: string;
   chunkCount: number;
-  extractionStatus: "ready" | "placeholder" | "failed";
+  readableChunkCount?: number;
+  lowQualityChunkCount?: number;
+  extractedCharCount?: number;
+  bestReadablePreview?: string;
+  topLowQualityReason?: string;
+  extractionStatus: "ready" | "partial" | "low_quality" | "placeholder" | "failed";
   note?: string;
 };
 
 type DocumentQueryMatch = {
   documentId: string;
   filename: string;
+  documentTitle?: string;
   type: string;
   chunkIndex: number;
   text: string;
+  quality?: ChunkQuality;
   score: number;
 };
+
+type ChunkQualityStatus = "readable" | "low_quality" | "garbage";
+
+type ChunkQuality = {
+  score: number;
+  status: ChunkQualityStatus;
+  reason?: string;
+};
+
+type LocalDocumentStatus =
+  | "not_searched"
+  | "used"
+  | "no_match"
+  | "found_no_readable_chunks"
+  | "empty";
 
 type LocalDocumentSourceChunk = {
   filename: string;
   chunkIndex: number;
   label: string;
   score: number;
+  qualityStatus?: ChunkQualityStatus;
+  qualityScore?: number;
   preview: string;
 };
 
 type MemoryEntry = {
   id: string;
-  type: "project" | "user_preference" | "learning_note";
+  type:
+    | "project_note"
+    | "study_note"
+    | "code_pattern"
+    | "mistake_corrected"
+    | "personal_preference";
   title: string;
   content: string;
+  sourceLabel?: string;
   createdAt: string;
   updatedAt: string;
   source: "manual";
@@ -74,6 +105,7 @@ type MemoryDraft = {
   type: MemoryEntry["type"];
   title: string;
   content: string;
+  sourceLabel: string;
 };
 
 type MemoryTypeFilter = MemoryEntry["type"] | "all";
@@ -87,9 +119,12 @@ type MessageContentPart =
 const STORAGE_KEY = "halo-console-v0.2-sessions";
 const ACTIVE_KEY = "halo-console-v0.2-active-session";
 const DEFAULT_MODEL = "qwen3:4b";
-const DOCUMENT_READY_MESSAGE = "Ready for local context.";
+const DOCUMENT_READY_MESSAGE = "Ready for local context";
+const DOCUMENT_PARTIAL_MESSAGE = "Partial extraction";
 const PDF_UNAVAILABLE_MESSAGE = "PDF uploaded, extraction unavailable/failed.";
 const NO_DOCUMENT_CHUNKS_MESSAGE = "No relevant local document chunks found.";
+const GENERIC_UPLOAD_ERROR =
+  "HALO could not read the upload response. Please try again.";
 
 const EMPTY_CHAT_TITLE = "New Chat";
 
@@ -158,10 +193,44 @@ function documentChunkLabel(count: number) {
   return `${count} chunk${count === 1 ? "" : "s"}`;
 }
 
+function formatCount(value: number | undefined) {
+  return typeof value === "number" ? value.toLocaleString() : "Unknown";
+}
+
+function extractionStatusLabel(status: DocumentRecord["extractionStatus"]) {
+  if (status === "ready") return DOCUMENT_READY_MESSAGE;
+  if (status === "partial") return DOCUMENT_PARTIAL_MESSAGE;
+  if (status === "low_quality") return "Low-quality extraction";
+  if (status === "failed") return "No extractable text / OCR needed";
+  return "Extraction unavailable";
+}
+
+async function readJsonResponse(response: Response) {
+  const contentType = response.headers.get("content-type") ?? "";
+
+  if (!contentType.toLowerCase().includes("application/json")) {
+    return null;
+  }
+
+  try {
+    return (await response.json()) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+}
+
+function getApiErrorMessage(data: Record<string, unknown> | null, fallback: string) {
+  return typeof data?.error === "string" && data.error.trim()
+    ? data.error
+    : fallback;
+}
+
 function memoryTypeLabel(type: MemoryEntry["type"]) {
-  if (type === "project") return "Project";
-  if (type === "user_preference") return "User preference";
-  return "Learning note";
+  if (type === "project_note") return "Project notes";
+  if (type === "study_note") return "Study notes";
+  if (type === "code_pattern") return "Code patterns";
+  if (type === "mistake_corrected") return "Mistakes corrected";
+  return "Personal preferences";
 }
 
 function formatMemoryContext(memories: MemoryEntry[]) {
@@ -169,25 +238,70 @@ function formatMemoryContext(memories: MemoryEntry[]) {
     .map((memory) => {
       return [
         `- [${memory.type}] ${memory.title}`,
+        memory.sourceLabel ? `  Source: ${memory.sourceLabel}` : "",
         `  ${memory.content.replace(/\s+/g, " ").trim()}`,
-      ].join("\n");
+      ]
+        .filter(Boolean)
+        .join("\n");
     })
     .join("\n");
 }
 
 function documentReadinessMessage(document: DocumentRecord) {
+  if (document.extractionStatus === "partial") {
+    return DOCUMENT_PARTIAL_MESSAGE;
+  }
+
+  if (document.extractionStatus === "low_quality") {
+    return "Low-quality extraction";
+  }
+
+  if (document.extractionStatus === "failed") {
+    return "No extractable text / OCR needed";
+  }
+
   if (document.type === "pdf") {
-    if (document.chunkCount > 0) return DOCUMENT_READY_MESSAGE;
+    if ((document.readableChunkCount ?? document.chunkCount) > 0) {
+      return DOCUMENT_READY_MESSAGE;
+    }
     return document.note ?? PDF_UNAVAILABLE_MESSAGE;
   }
 
-  if (["txt", "md", "log"].includes(document.type) && document.chunkCount > 0) {
+  if (
+    ["txt", "md", "log"].includes(document.type) &&
+    (document.readableChunkCount ?? document.chunkCount) > 0
+  ) {
     return DOCUMENT_READY_MESSAGE;
   }
 
-  if (document.chunkCount === 0) return "No local context chunks available.";
+  if (document.chunkCount === 0) return "No extractable text / OCR needed";
 
   return DOCUMENT_READY_MESSAGE;
+}
+
+function uploadStatusMessage(document?: Partial<DocumentRecord>) {
+  if (!document) return "Document uploaded.";
+
+  if (document.extractionStatus === "partial") {
+    return "Document uploaded with partial readable text.";
+  }
+
+  if (
+    document.extractionStatus === "ready" &&
+    (document.readableChunkCount ?? document.chunkCount ?? 0) > 0
+  ) {
+    return "Document uploaded and ready for local context.";
+  }
+
+  if (document.extractionStatus === "low_quality") {
+    return "Document uploaded, but extracted text quality is too low for reliable local context. OCR is not implemented yet.";
+  }
+
+  if (document.extractionStatus === "failed") {
+    return "Document uploaded, but no extractable text was found. OCR is not implemented yet.";
+  }
+
+  return "Document uploaded.";
 }
 
 function parseStoredSessions(value: string | null) {
@@ -262,15 +376,40 @@ function parseLocalDocumentChunks(value: string | null) {
   }
 }
 
+function parseLocalDocumentStatus(value: string | null): LocalDocumentStatus {
+  if (
+    value === "used" ||
+    value === "no_match" ||
+    value === "found_no_readable_chunks" ||
+    value === "empty"
+  ) {
+    return value;
+  }
+
+  return "not_searched";
+}
+
 function safeSourceLabel(value: string) {
   return value.split(/[\\/]/).pop()?.trim() || "Uploaded document";
 }
 
 function previewText(value: string, limit = 320) {
-  const normalized = value.replace(/\s+/g, " ").trim();
+  const normalized = value
+    .replace(/[^\S\r\n]+/g, " ")
+    .replace(/([!#$%&'*+,./:;<=>?@[\\\]^_`{|}~-])(?:\s+\1){2,}/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
 
   if (normalized.length <= limit) return normalized;
   return `${normalized.slice(0, limit).trimEnd()}...`;
+}
+
+function qualityLabel(status?: ChunkQualityStatus) {
+  if (status === "low_quality" || status === "garbage") {
+    return "Low-quality extracted text";
+  }
+
+  return "Readable";
 }
 
 function parseFencedCodeBlocks(content: string): MessageContentPart[] {
@@ -332,6 +471,10 @@ function renderLocalDocumentSources(localDocs: NonNullable<ChatMessage["localDoc
     localDocs.sources && localDocs.sources.length > 0
       ? ` - ${localDocs.sources.map(safeSourceLabel).join("; ")}`
       : "";
+  const searchedLabel =
+    localDocs.status === "found_no_readable_chunks"
+      ? "LOCAL DOCS SEARCHED: DOCUMENT FOUND, BUT NO READABLE CHUNKS USED"
+      : "LOCAL DOCS SEARCHED: NO CHUNKS USED";
 
   return (
     <div className="local-docs-context">
@@ -344,7 +487,7 @@ function renderLocalDocumentSources(localDocs: NonNullable<ChatMessage["localDoc
       >
         {localDocs.usedChunks > 0
           ? `LOCAL DOCS USED: ${localDocs.usedChunks} CHUNKS`
-          : "LOCAL DOCS SEARCHED: NO CHUNKS USED"}
+          : searchedLabel}
         {sourceHint}
       </div>
 
@@ -357,23 +500,42 @@ function renderLocalDocumentSources(localDocs: NonNullable<ChatMessage["localDoc
                 className="source-chunk"
                 key={`${chunk.filename}-${chunk.chunkIndex}`}
               >
+                {(() => {
+                  const filename = safeSourceLabel(chunk.filename);
+
+                  return (
                 <div className="source-chunk-fields">
-                  <div>
-                    <span>Document</span>
-                    <strong title={safeSourceLabel(chunk.filename)}>
-                      {safeSourceLabel(chunk.filename)}
+                  <div className="source-chunk-row source-chunk-document">
+                    <span className="source-chunk-label">Document:</span>
+                    <strong className="source-chunk-value" title={filename}>
+                      {filename}
                     </strong>
                   </div>
-                  <div>
-                    <span>Chunk</span>
-                    <strong>
-                      {chunk.label} · score {chunk.score}
+                  <div className="source-chunk-row">
+                    <span className="source-chunk-label">Chunk:</span>
+                    <strong className="source-chunk-value">
+                      {chunk.label}
                     </strong>
+                  </div>
+                  <div className="source-chunk-row">
+                    <span className="source-chunk-label">Quality:</span>
+                    <strong className="source-chunk-value">
+                      {qualityLabel(chunk.qualityStatus)}
+                      {typeof chunk.qualityScore === "number"
+                        ? ` · ${chunk.qualityScore}/100`
+                        : ""}
+                    </strong>
+                  </div>
+                  <div className="source-chunk-row">
+                    <span className="source-chunk-label">Score:</span>
+                    <strong className="source-chunk-value">{chunk.score}</strong>
                   </div>
                 </div>
-                <p>
-                  <span>Preview</span>
-                  {previewText(chunk.preview, 220)}
+                  );
+                })()}
+                <p className="source-chunk-preview">
+                  <span className="source-chunk-label">Preview:</span>
+                  <span>{previewText(chunk.preview, 220)}</span>
                 </p>
               </article>
             ))}
@@ -390,7 +552,7 @@ function renderLocalMemoryIndicator(localMemory: NonNullable<ChatMessage["localM
   return (
     <div className="local-memory-context">
       <div className="context-indicator active">
-        LOCAL MEMORY USED: {localMemory.usedEntries}{" "}
+        SELECTED LEARNING CONTEXT USED: {localMemory.usedEntries}{" "}
         {localMemory.usedEntries === 1 ? "ENTRY" : "ENTRIES"}
       </div>
     </div>
@@ -416,11 +578,12 @@ export default function Home() {
   const [isQueryingDocuments, setIsQueryingDocuments] = useState(false);
   const [expandedDocumentIds, setExpandedDocumentIds] = useState<string[]>([]);
   const [memories, setMemories] = useState<MemoryEntry[]>([]);
-  const [memoryType, setMemoryType] = useState<MemoryEntry["type"]>("project");
+  const [memoryType, setMemoryType] = useState<MemoryEntry["type"]>("project_note");
   const [memoryTitle, setMemoryTitle] = useState("");
   const [memoryContent, setMemoryContent] = useState("");
+  const [memorySourceLabel, setMemorySourceLabel] = useState("");
   const [memoryStatus, setMemoryStatus] = useState(
-    "Manual local memory only; chat uses selected entries only when enabled."
+    "Manual local learning only; chat uses selected notes only when enabled."
   );
   const [memorySearch, setMemorySearch] = useState("");
   const [memoryTypeFilter, setMemoryTypeFilter] =
@@ -431,9 +594,10 @@ export default function Home() {
   const [isSavingMemory, setIsSavingMemory] = useState(false);
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
   const [editingMemoryDraft, setEditingMemoryDraft] = useState<MemoryDraft>({
-    type: "project",
+    type: "project_note",
     title: "",
     content: "",
+    sourceLabel: "",
   });
   const [isUpdatingMemory, setIsUpdatingMemory] = useState(false);
   const [hasLoadedLocalData, setHasLoadedLocalData] = useState(false);
@@ -461,6 +625,7 @@ export default function Home() {
         !query ||
         memory.title.toLowerCase().includes(query) ||
         memory.content.toLowerCase().includes(query) ||
+        (memory.sourceLabel ?? "").toLowerCase().includes(query) ||
         memory.type.toLowerCase().includes(query);
 
       return matchesType && matchesQuery;
@@ -593,12 +758,12 @@ export default function Home() {
       setMemories(nextMemories);
       setMemoryStatus(
         nextMemories.length > 0
-          ? `${nextMemories.length} manual local memor${nextMemories.length === 1 ? "y" : "ies"} saved.`
-          : "No manual memories saved. Add one only when you want HALO to remember it locally."
+          ? `${nextMemories.length} manual local learning note${nextMemories.length === 1 ? "" : "s"} saved.`
+          : "No manual learning notes saved. Add one only when you want HALO to remember it locally."
       );
     } catch {
       setMemories([]);
-      setMemoryStatus("Memory list unavailable.");
+      setMemoryStatus("Learning note list unavailable.");
     }
   }
 
@@ -652,15 +817,16 @@ export default function Home() {
         method: "POST",
         body: formData,
       });
-      const data = await response.json();
+      const data = await readJsonResponse(response);
 
-      if (!response.ok || data.ok !== true) {
-        throw new Error(data.error ?? "Document upload failed.");
+      if (!response.ok || data?.ok !== true) {
+        throw new Error(getApiErrorMessage(data, GENERIC_UPLOAD_ERROR));
       }
 
-      setDocumentStatus(data.document?.note ?? "Document uploaded.");
+      const document = data.document as Partial<DocumentRecord> | undefined;
       setDocumentMatches([]);
       await refreshDocuments();
+      setDocumentStatus(uploadStatusMessage(document));
     } catch (error) {
       setDocumentStatus(
         error instanceof Error ? error.message : "Document upload failed."
@@ -702,11 +868,12 @@ export default function Home() {
 
     const title = memoryTitle.trim();
     const content = memoryContent.trim();
+    const sourceLabel = memorySourceLabel.trim();
 
     if (!title || !content || isSavingMemory) return;
 
     setIsSavingMemory(true);
-    setMemoryStatus("Saving manual memory...");
+    setMemoryStatus("Saving manual learning note...");
 
     try {
       const response = await fetch("/api/memory/create", {
@@ -716,21 +883,23 @@ export default function Home() {
           type: memoryType,
           title,
           content,
+          sourceLabel,
         }),
       });
       const data = await response.json();
 
       if (!response.ok || data.ok !== true) {
-        throw new Error(data.error ?? "Memory create failed.");
+        throw new Error(data.error ?? "Learning note create failed.");
       }
 
       setMemoryTitle("");
       setMemoryContent("");
-      setMemoryStatus("Manual memory saved.");
+      setMemorySourceLabel("");
+      setMemoryStatus("Manual learning note saved.");
       await refreshMemories();
     } catch (error) {
       setMemoryStatus(
-        error instanceof Error ? error.message : "Memory create failed."
+        error instanceof Error ? error.message : "Learning note create failed."
       );
     } finally {
       setIsSavingMemory(false);
@@ -743,18 +912,20 @@ export default function Home() {
       type: memory.type,
       title: memory.title,
       content: memory.content,
+      sourceLabel: memory.sourceLabel ?? "",
     });
-    setMemoryStatus("Reviewing manual memory. Save only if the edited text is safe to keep.");
+    setMemoryStatus("Reviewing manual learning note. Save only if the edited text is safe to keep.");
   }
 
   function cancelEditingMemory() {
     setEditingMemoryId(null);
     setEditingMemoryDraft({
-      type: "project",
+      type: "project_note",
       title: "",
       content: "",
+      sourceLabel: "",
     });
-    setMemoryStatus("Memory edit cancelled.");
+    setMemoryStatus("Learning note edit cancelled.");
   }
 
   async function updateMemory(event: FormEvent, id: string) {
@@ -762,14 +933,15 @@ export default function Home() {
 
     const title = editingMemoryDraft.title.trim();
     const content = editingMemoryDraft.content.trim();
+    const sourceLabel = editingMemoryDraft.sourceLabel.trim();
 
     if (!title || !content || isUpdatingMemory) {
-      setMemoryStatus("Memory title and content are required.");
+      setMemoryStatus("Learning note title and note are required.");
       return;
     }
 
     setIsUpdatingMemory(true);
-    setMemoryStatus("Saving memory edit...");
+    setMemoryStatus("Saving learning note edit...");
 
     try {
       const response = await fetch("/api/memory/update", {
@@ -780,25 +952,27 @@ export default function Home() {
           type: editingMemoryDraft.type,
           title,
           content,
+          sourceLabel,
         }),
       });
       const data = await response.json();
 
       if (!response.ok || data.ok !== true) {
-        throw new Error(data.error ?? "Memory update failed.");
+        throw new Error(data.error ?? "Learning note update failed.");
       }
 
       setEditingMemoryId(null);
       setEditingMemoryDraft({
-        type: "project",
+        type: "project_note",
         title: "",
         content: "",
+        sourceLabel: "",
       });
-      setMemoryStatus("Manual memory updated.");
+      setMemoryStatus("Manual learning note updated.");
       await refreshMemories();
     } catch (error) {
       setMemoryStatus(
-        error instanceof Error ? error.message : "Memory update failed."
+        error instanceof Error ? error.message : "Learning note update failed."
       );
     } finally {
       setIsUpdatingMemory(false);
@@ -806,7 +980,7 @@ export default function Home() {
   }
 
   async function deleteMemory(id: string, title: string) {
-    const confirmed = window.confirm(`Delete manual memory "${title}"?`);
+    const confirmed = window.confirm(`Delete manual learning note "${title}"?`);
     if (!confirmed) return;
 
     try {
@@ -818,7 +992,7 @@ export default function Home() {
       const data = await response.json();
 
       if (!response.ok || data.ok !== true) {
-        throw new Error(data.error ?? "Memory delete failed.");
+        throw new Error(data.error ?? "Learning note delete failed.");
       }
 
       setSelectedMemoryIds((current) =>
@@ -827,11 +1001,11 @@ export default function Home() {
       if (selectedMemoryIds.includes(id) && selectedMemoryCount <= 1) {
         setUseSelectedMemory(false);
       }
-      setMemoryStatus("Manual memory deleted.");
+      setMemoryStatus("Manual learning note deleted.");
       await refreshMemories();
     } catch (error) {
       setMemoryStatus(
-        error instanceof Error ? error.message : "Memory delete failed."
+        error instanceof Error ? error.message : "Learning note delete failed."
       );
     }
   }
@@ -862,7 +1036,9 @@ export default function Home() {
       setDocumentStatus(
         matches.length > 0
           ? `${matches.length} local document chunk${matches.length === 1 ? "" : "s"} returned.`
-          : NO_DOCUMENT_CHUNKS_MESSAGE
+          : typeof data.answer === "string"
+            ? data.answer
+            : NO_DOCUMENT_CHUNKS_MESSAGE
       );
     } catch (error) {
       setDocumentMatches([]);
@@ -1052,6 +1228,9 @@ export default function Home() {
 
       if (shouldUseLocalDocuments) {
         const usedChunks = Number(response.headers.get("X-HALO-Local-Docs-Used") ?? "0");
+        const localDocumentStatus = parseLocalDocumentStatus(
+          response.headers.get("X-HALO-Local-Docs-Status")
+        );
         const sources = parseLocalDocumentSources(
           response.headers.get("X-HALO-Local-Docs-Sources")
         );
@@ -1068,6 +1247,7 @@ export default function Home() {
             localDocs: {
               enabled: true,
               usedChunks: Number.isFinite(usedChunks) ? usedChunks : 0,
+              status: localDocumentStatus,
               sources,
               chunks,
             },
@@ -1264,37 +1444,64 @@ export default function Home() {
             ) : (
               documents.map((document) => {
                 const isExpanded = expandedDocumentIds.includes(document.id);
+                const readinessMessage = documentReadinessMessage(document);
+                const isLowQualityExtraction =
+                  document.extractionStatus === "low_quality";
+                const isPartialExtraction =
+                  document.extractionStatus === "partial";
+                const readinessClass = isLowQualityExtraction
+                  ? "warning"
+                  : isPartialExtraction
+                    ? "neutral"
+                    : readinessMessage === DOCUMENT_READY_MESSAGE
+                      ? "ready"
+                      : "neutral";
 
                 return (
                   <article
-                    className={`document-row ${
-                      document.chunkCount === 0 ? "empty" : ""
-                    } ${isExpanded ? "expanded" : ""}`}
+                    className={`document-row ${isExpanded ? "expanded" : ""}`}
                     key={document.id}
                     tabIndex={0}
                   >
-                    <div className="document-summary">
-                      <strong title={document.filename}>{document.filename}</strong>
-                      <div className="document-meta" aria-label="Document metadata">
-                        <span>{documentTypeLabel(document.type)}</span>
-                        <span>{documentChunkLabel(document.chunkCount)}</span>
-                        <span>{formatShortDate(document.createdAt)}</span>
+                    <div className="document-card-main">
+                      <div className="document-summary">
+                        <div className="document-title-row">
+                          <strong title={document.filename}>
+                            {document.filename}
+                          </strong>
+                          <span className={`document-status-chip ${readinessClass}`}>
+                            {readinessMessage}
+                          </span>
+                        </div>
+                        <div className="document-meta" aria-label="Document metadata">
+                          <span>{documentTypeLabel(document.type)}</span>
+                          <span>{documentChunkLabel(document.chunkCount)}</span>
+                          <span>{formatShortDate(document.createdAt)}</span>
+                        </div>
+                        {isLowQualityExtraction || isPartialExtraction ? (
+                          <p className="document-inline-notice">
+                            {document.note ?? PDF_UNAVAILABLE_MESSAGE}
+                          </p>
+                        ) : null}
                       </div>
-                    </div>
-                    <div className="document-card-actions">
-                      <button
-                        type="button"
-                        aria-expanded={isExpanded}
-                        onClick={() => toggleDocumentDetails(document.id)}
+                      <div
+                        className="document-card-actions"
+                        aria-label={`${document.filename} actions`}
                       >
-                        {isExpanded ? "Hide" : "Details"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteDocument(document.id, document.filename)}
-                      >
-                        Delete
-                      </button>
+                        <button
+                          type="button"
+                          aria-expanded={isExpanded}
+                          onClick={() => toggleDocumentDetails(document.id)}
+                        >
+                          {isExpanded ? "Hide" : "Details"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteDocument(document.id, document.filename)}
+                        >
+                          Delete
+                        </button>
+                      </div>
                     </div>
                     <div className="document-details">
                       <dl>
@@ -1303,16 +1510,46 @@ export default function Home() {
                           <dd>{documentTypeLabel(document.type)}</dd>
                         </div>
                         <div>
-                          <dt>Chunks</dt>
+                          <dt>Total chunks</dt>
                           <dd>{documentChunkLabel(document.chunkCount)}</dd>
+                        </div>
+                        <div>
+                          <dt>Readable chunks</dt>
+                          <dd>
+                            {document.readableChunkCount ?? document.chunkCount}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Low-quality chunks</dt>
+                          <dd>{document.lowQualityChunkCount ?? 0}</dd>
+                        </div>
+                        <div>
+                          <dt>Extraction status</dt>
+                          <dd>{extractionStatusLabel(document.extractionStatus)}</dd>
+                        </div>
+                        <div>
+                          <dt>Extracted characters</dt>
+                          <dd>{formatCount(document.extractedCharCount)}</dd>
                         </div>
                         <div>
                           <dt>Created</dt>
                           <dd>{formatShortDate(document.createdAt)}</dd>
                         </div>
                       </dl>
+                      {document.bestReadablePreview ? (
+                        <p className="document-readiness">
+                          Best readable preview:{" "}
+                          {previewText(document.bestReadablePreview, 220)}
+                        </p>
+                      ) : null}
+                      {document.extractionStatus === "low_quality" &&
+                      document.topLowQualityReason ? (
+                        <p className="document-readiness">
+                          Top low-quality reason: {document.topLowQualityReason}
+                        </p>
+                      ) : null}
                       <p className="document-readiness">
-                        {documentReadinessMessage(document)}
+                        {readinessMessage}
                       </p>
                     </div>
                   </article>
@@ -1340,28 +1577,34 @@ export default function Home() {
                   key={`${match.documentId}-${match.chunkIndex}`}
                 >
                   <strong>
-                    {match.filename} · chunk {match.chunkIndex + 1}
+                    {match.documentTitle || match.filename} · chunk{" "}
+                    {match.chunkIndex + 1}
                   </strong>
                   <span className="document-match-meta">
-                    score {match.score} · local keyword/identifier match
+                    {match.filename} · score {match.score} ·{" "}
+                    {qualityLabel(match.quality?.status)}
+                    {typeof match.quality?.score === "number"
+                      ? ` ${match.quality.score}/100`
+                      : ""}
                   </span>
-                  <p>{previewText(match.text)}</p>
+                  <p>{previewText(match.text, 220)}</p>
                 </article>
               ))}
             </div>
           ) : null}
         </section>
 
-        <section className="sidebar-section memory-box" aria-label="Manual local memory">
+        <section className="sidebar-section memory-box" aria-label="HALO Learning Layer">
           <div className="section-heading">
-            <p className="section-title">Memory</p>
-            <span aria-label={`${memories.length} manual local memories`}>
+            <p className="section-title">HALO Learning Layer</p>
+            <span aria-label={`${memories.length} manual local learning notes`}>
               {memories.length}
             </span>
           </div>
 
           <p className="memory-disclosure">
-            Manual only. Selected entries are sent only when enabled. Do not store secrets.
+            Learning notes are manual and local. Do not store secrets, passwords,
+            tokens, private paths, or full chat transcripts.
           </p>
           <p className="memory-status">{memoryStatus}</p>
 
@@ -1371,11 +1614,13 @@ export default function Home() {
               onChange={(event) =>
                 setMemoryType(event.target.value as MemoryEntry["type"])
               }
-              aria-label="Memory type"
+              aria-label="Learning note type"
             >
-              <option value="project">Project</option>
-              <option value="user_preference">User preference</option>
-              <option value="learning_note">Learning note</option>
+              <option value="project_note">Project notes</option>
+              <option value="study_note">Study notes</option>
+              <option value="code_pattern">Code patterns</option>
+              <option value="mistake_corrected">Mistakes corrected</option>
+              <option value="personal_preference">Personal preferences</option>
             </select>
             <input
               value={memoryTitle}
@@ -1387,26 +1632,33 @@ export default function Home() {
               value={memoryContent}
               onChange={(event) => setMemoryContent(event.target.value)}
               maxLength={800}
-              placeholder="Curated memory note..."
+              placeholder="Short curated learning note..."
               rows={4}
+            />
+            <input
+              value={memorySourceLabel}
+              onChange={(event) => setMemorySourceLabel(event.target.value)}
+              maxLength={80}
+              placeholder="Optional source label"
+              aria-label="Optional source label"
             />
             <button
               className="compact-button"
               disabled={!memoryTitle.trim() || !memoryContent.trim() || isSavingMemory}
             >
-              {isSavingMemory ? "Saving" : "Add Memory"}
+              {isSavingMemory ? "Saving" : "Add Learning Note"}
             </button>
           </form>
 
-          <div className="memory-filters" aria-label="Memory filters">
+          <div className="memory-filters" aria-label="Learning filters">
             <input
               value={memorySearch}
               onChange={(event) => {
                 setMemorySearch(event.target.value);
                 setUseSelectedMemory(false);
               }}
-              placeholder="Search memory..."
-              aria-label="Search memory"
+              placeholder="Search learning..."
+              aria-label="Search learning notes"
             />
             <select
               value={memoryTypeFilter}
@@ -1414,12 +1666,14 @@ export default function Home() {
                 setMemoryTypeFilter(event.target.value as MemoryTypeFilter);
                 setUseSelectedMemory(false);
               }}
-              aria-label="Filter memory by type"
+              aria-label="Filter learning notes by type"
             >
               <option value="all">All types</option>
-              <option value="project">Project</option>
-              <option value="user_preference">User preference</option>
-              <option value="learning_note">Learning note</option>
+              <option value="project_note">Project notes</option>
+              <option value="study_note">Study notes</option>
+              <option value="code_pattern">Code patterns</option>
+              <option value="mistake_corrected">Mistakes corrected</option>
+              <option value="personal_preference">Personal preferences</option>
             </select>
           </div>
 
@@ -1436,21 +1690,21 @@ export default function Home() {
             </button>
           </div>
 
-          <section className="memory-preview" aria-label="Memory preview">
+          <section className="memory-preview" aria-label="Learning context preview">
             <div className="memory-preview-heading">
-              <strong>Memory preview</strong>
+              <strong>Selected learning preview</strong>
               <span>{shouldUseSelectedMemory ? "Will be sent" : "Preview only"}</span>
             </div>
             <p>
               {shouldUseSelectedMemory
-                ? "Will be sent: only the selected visible entries in this preview."
-                : "Preview only: no memory will be sent until USE SELECTED MEMORY is on."}
+                ? "Will be sent: only the selected visible notes in this preview."
+                : "Preview only: no learning notes will be sent until USE SELECTED LEARNING is on."}
             </p>
             {selectedMemories.length > 0 ? (
               <pre>{selectedMemoryContext}</pre>
             ) : (
               <div className="memory-preview-empty">
-                Select visible memories to preview compact context.
+                Select visible learning notes to preview compact context.
               </div>
             )}
           </section>
@@ -1458,16 +1712,16 @@ export default function Home() {
           <div className="memory-list">
             {memories.length === 0 ? (
               <div className="memory-empty">
-                <strong>No manual memories saved.</strong>
+                <strong>No manual learning notes saved.</strong>
                 <p>
-                  Add short curated notes only. Avoid secrets, keys, tokens, and transcripts.
+                  Add short curated notes only. Keep Documents and Learning separate.
                 </p>
               </div>
             ) : visibleMemories.length === 0 ? (
               <div className="memory-empty">
-                <strong>No matching memories.</strong>
+                <strong>No matching learning notes.</strong>
                 <p>
-                  Adjust the search text or type filter. Saved memories remain
+                  Adjust the search text or type filter. Saved learning notes remain
                   local and unchanged.
                 </p>
               </div>
@@ -1499,11 +1753,13 @@ export default function Home() {
                               type: event.target.value as MemoryEntry["type"],
                             }))
                           }
-                          aria-label="Edit memory type"
+                          aria-label="Edit learning note type"
                         >
-                          <option value="project">Project</option>
-                          <option value="user_preference">User preference</option>
-                          <option value="learning_note">Learning note</option>
+                          <option value="project_note">Project notes</option>
+                          <option value="study_note">Study notes</option>
+                          <option value="code_pattern">Code patterns</option>
+                          <option value="mistake_corrected">Mistakes corrected</option>
+                          <option value="personal_preference">Personal preferences</option>
                         </select>
                         <input
                           value={editingMemoryDraft.title}
@@ -1514,7 +1770,7 @@ export default function Home() {
                             }))
                           }
                           maxLength={80}
-                          aria-label="Edit memory title"
+                          aria-label="Edit learning note title"
                         />
                         <textarea
                           value={editingMemoryDraft.content}
@@ -1526,7 +1782,19 @@ export default function Home() {
                           }
                           maxLength={800}
                           rows={5}
-                          aria-label="Edit memory content"
+                          aria-label="Edit learning note content"
+                        />
+                        <input
+                          value={editingMemoryDraft.sourceLabel}
+                          onChange={(event) =>
+                            setEditingMemoryDraft((draft) => ({
+                              ...draft,
+                              sourceLabel: event.target.value,
+                            }))
+                          }
+                          maxLength={80}
+                          aria-label="Edit optional source label"
+                          placeholder="Optional source label"
                         />
                         <div className="memory-actions">
                           <button
@@ -1561,6 +1829,11 @@ export default function Home() {
                         <div className="memory-details">
                           <div className="memory-meta">
                             <span>{memoryTypeLabel(memory.type)}</span>
+                            {memory.sourceLabel ? (
+                              <span title={memory.sourceLabel}>
+                                {memory.sourceLabel}
+                              </span>
+                            ) : null}
                           </div>
                           <strong title={memory.title}>{memory.title}</strong>
                           <p
@@ -1571,6 +1844,11 @@ export default function Home() {
                           </p>
                           <div className="memory-full-details">
                             <p>{memory.content}</p>
+                            {memory.sourceLabel ? (
+                              <p className="memory-source-label">
+                                Source: {memory.sourceLabel}
+                              </p>
+                            ) : null}
                             <dl className="memory-dates">
                               <div>
                                 <dt>Created</dt>
@@ -1679,7 +1957,7 @@ export default function Home() {
             </div>
             <div>
               <dt>Version</dt>
-              <dd>v0.6.6-local</dd>
+              <dd>v0.7.5-local</dd>
             </div>
           </dl>
         </section>
@@ -1764,7 +2042,7 @@ export default function Home() {
                 onChange={(event) => setUseSelectedMemory(event.target.checked)}
               />
               <span>
-                USE SELECTED MEMORY ({selectedMemoryCount} selected)
+                USE SELECTED LEARNING ({selectedMemoryCount} selected)
               </span>
             </label>
           </div>
