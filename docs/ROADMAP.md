@@ -1,78 +1,85 @@
 # Roadmap
 
-This roadmap keeps HALO Console local-first and Ollama-centered. Items here are not commitments to add cloud APIs, hosted model providers, Web Search providers by default, or Agent Bridge automation.
+This roadmap keeps HALO Console local-first, Ollama-centered, and public-preview safe. Items here are not commitments to add cloud APIs, hosted model providers, enabled Web Search, or automation with shell access.
 
-## v0.4a Public Export
+## v0.7.9 Public Preview
 
-- Public-facing README.
-- Architecture documentation.
-- Security boundary documentation.
-- Roadmap documentation.
-- Sanitized public repository contents.
-- Lint and production build validation.
+Current public preview scope:
+
+- Local streaming chat through Ollama.
+- Quick, Daily, and Heavy local model labels.
+- Browser-local saved chat sessions.
+- Local document upload, listing, deletion, query, and selected document scope.
+- Text-based PDF extraction with readable chunk filtering.
+- Source/chunk inspector UI for local document context.
+- Manual HALO Learning Layer notes with selected-note context injection.
+- Web Search route/provider foundation present but disabled unless configured.
+- Public documentation for architecture, release notes, roadmap, and security boundaries.
 
 ## Near-Term Local Improvements
 
-- Add focused tests for model routing, search policy detection, and input validation.
-- Improve error states for missing Ollama models.
-- Add clearer model availability messaging in the UI.
-- Add source display in chat when Web Search is configured and enabled.
-- Add provider health checks for optional local Web Search.
-
-## Web Search Foundation
-
-The current Web Search foundation should remain disabled by default.
-
-Potential improvements:
-
-- source cards for streamed answers,
-- configurable result count,
-- provider status in the UI,
-- local SearXNG setup notes that do not include private hostnames or credentials,
-- tests for provider normalization and failure handling.
+- Add focused tests for model routing, chat request validation, selected document scope, and selected learning context selection.
+- Improve missing-model and unreachable-Ollama error states in the UI.
+- Add clearer document extraction status messages for partial and low-quality documents.
+- Add import/export controls for sanitized learning notes.
+- Add stronger public examples using generic sample documents only.
 
 ## Documents And Retrieval
 
-Documents/RAG is not implemented in v0.4a.
+The current document system is intentionally simple and local.
 
-Future work should require an explicit design for:
+Potential improvements:
 
-- user-approved document selection,
-- ingestion and chunking,
-- metadata handling,
-- local-only vector storage,
-- deletion and re-indexing,
-- private file boundaries.
+- Better chunk ranking for long documents.
+- Optional local embeddings or a local vector index.
+- Re-indexing controls.
+- Document metadata review before context use.
+- Bulk deletion and storage cleanup controls.
+- OCR as an explicit local-only feature, if added later.
 
-## Memory
+## HALO Learning Layer
 
-Persistent assistant memory is not implemented in v0.4a.
+The Learning Layer should remain manual and user-curated.
 
-Future work should distinguish between:
+Potential improvements:
 
-- browser-local chat history,
-- user-approved preferences,
-- durable memory storage,
-- export and deletion controls.
+- Better note organization and tags.
+- Safer duplicate detection.
+- Export/import for user-reviewed notes.
+- More transparent prompt previews for selected learning context.
+- Tests that confirm unselected notes are not injected into chat.
+
+## Web Search Foundation
+
+Web Search remains disabled and unconfigured by default.
+
+Potential improvements, if an operator chooses to configure a local provider:
+
+- Provider health checks.
+- Source cards for streamed answers.
+- Configurable result count.
+- Clear not-configured and provider-failed states.
+- Public setup notes that use only generic hostnames and placeholders.
 
 ## Agent Bridge
 
-Agent Bridge is not included in this public export.
+Agent Bridge is not included in this public preview.
 
 Any future automation layer should be treated as a separate security project with:
 
-- explicit user confirmation,
-- narrow allowlists,
-- audit logs,
-- no arbitrary command runner,
-- no default access to secrets or private files.
+- Explicit user confirmation.
+- Narrow allowlists.
+- Audit logs.
+- No arbitrary command runner.
+- No default access to secrets or private files.
 
 ## Deployment Notes
 
 HALO Console should remain easy to run locally:
 
-- Next.js app,
-- local Ollama runtime,
-- no required external services,
-- no required API keys,
-- no committed environment files.
+- Next.js app.
+- Local Ollama runtime.
+- No required external services.
+- No required API keys.
+- No committed environment files.
+- No private runtime data in the public repository.
