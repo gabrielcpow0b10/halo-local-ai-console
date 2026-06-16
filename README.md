@@ -50,6 +50,10 @@ v0.7.8-local note: the sidebar model selector now merges active and installed mo
 
 Model selector polish notes: [docs/HALO_CONSOLE_V0_7_8_MODEL_SELECTOR_POLISH.md](docs/HALO_CONSOLE_V0_7_8_MODEL_SELECTOR_POLISH.md).
 
+v0.7.9-local note: the chat/session area now has clearer session status, compact saved-chat cards, calmer empty/loading states, and cleaner composer toggles. This is UI and browser-local session polish only; model routing, Ollama behavior, document retrieval, Learning Layer storage, and security boundaries are unchanged.
+
+Chat/session polish notes: [docs/HALO_CONSOLE_V0_7_9_CHAT_SESSION_POLISH.md](docs/HALO_CONSOLE_V0_7_9_CHAT_SESSION_POLISH.md).
+
 ## Local Architecture
 
 - Browser UI: Next.js App Router page at `/`

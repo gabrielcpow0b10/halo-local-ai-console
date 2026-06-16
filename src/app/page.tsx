@@ -455,7 +455,7 @@ function parseFencedCodeBlocks(content: string): MessageContentPart[] {
 }
 
 function renderMessageContent(content: string) {
-  if (!content) return "Thinking...";
+  if (!content) return "HALO is thinking...";
 
   return parseFencedCodeBlocks(content).map((part, index) => {
     if (part.type === "text") {
@@ -680,6 +680,38 @@ export default function Home() {
   const shouldUseSelectedMemory = useSelectedMemory && selectedMemoryCount > 0;
   const webSearchAvailable = webSearchState === "configured";
   const shouldUseWebSearch = webSearchEnabled && webSearchAvailable;
+  const activeSessionSaved = activeSession ? isSavedSession(activeSession) : false;
+  const sessionStatusLabels = useMemo(() => {
+    const labels: string[] = [];
+
+    if (!activeSession || !activeSessionSaved) {
+      labels.push("New chat");
+    } else {
+      labels.push("Saved session");
+    }
+
+    if (activeSession && activeSession.messages.length === 0 && !activeSessionSaved) {
+      labels.push("Unsaved session");
+    }
+
+    if (localDocumentsEnabled) labels.push("Local docs enabled");
+    if (localDocumentsEnabled && useSelectedDocuments) {
+      labels.push(`Selected docs enabled (${selectedDocumentCount})`);
+    }
+    if (shouldUseSelectedMemory) {
+      labels.push(`Selected learning enabled (${selectedMemoryCount})`);
+    }
+
+    return labels;
+  }, [
+    activeSession,
+    activeSessionSaved,
+    localDocumentsEnabled,
+    selectedDocumentCount,
+    selectedMemoryCount,
+    shouldUseSelectedMemory,
+    useSelectedDocuments,
+  ]);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -1187,7 +1219,9 @@ export default function Home() {
   function clearActiveChat() {
     if (!activeSession) return;
 
-    const confirmed = window.confirm("Clear the current chat messages?");
+    const confirmed = window.confirm(
+      "Clear only the messages in this chat? Documents, selected docs, and learning notes stay unchanged."
+    );
     if (!confirmed) return;
 
     stopGeneration();
@@ -2057,7 +2091,7 @@ export default function Home() {
             </div>
             <div>
               <dt>Version</dt>
-              <dd>v0.7.8-local</dd>
+              <dd>v0.7.9-local</dd>
             </div>
           </dl>
         </section>
@@ -2069,12 +2103,23 @@ export default function Home() {
             <p className="eyebrow">Session</p>
             <h2>{activeSession?.title ?? "New Chat"}</h2>
             <p>{modelDisplay(activeSession?.model ?? DEFAULT_MODEL)}</p>
+            <div className="session-status-line" aria-label="Session status">
+              {sessionStatusLabels.map((label) => (
+                <span key={label}>{label}</span>
+              ))}
+            </div>
           </div>
           <div className="header-actions">
             <span className={isLoading ? "status-pill active" : "status-pill"}>
-              {isLoading ? "Generating" : "Ready"}
+              {isLoading ? "HALO is thinking" : "Ready"}
             </span>
-            <button onClick={clearActiveChat}>Clear Chat</button>
+            <button
+              onClick={clearActiveChat}
+              disabled={(activeSession?.messages.length ?? 0) === 0}
+              title="Clears only the current chat messages"
+            >
+              Clear Chat
+            </button>
           </div>
         </header>
 
@@ -2171,15 +2216,9 @@ export default function Home() {
               }
             }}
           />
-          {isLoading ? (
-            <button type="button" onClick={stopGeneration}>
-              Stop
-            </button>
-          ) : (
-            <button type="submit" disabled={!input.trim()}>
-              Send
-            </button>
-          )}
+          <button type="submit" disabled={!input.trim() || isLoading}>
+            {isLoading ? "Sending" : "Send"}
+          </button>
         </form>
       </section>
     </main>
