@@ -46,6 +46,10 @@ v0.7.7-local note: Documents, selected document cards, HALO Learning Layer cards
 
 UI/UX polish notes: [docs/HALO_CONSOLE_V0_7_7_UI_UX_POLISH.md](docs/HALO_CONSOLE_V0_7_7_UI_UX_POLISH.md).
 
+v0.7.8-local note: the sidebar model selector now merges active and installed model details into one compact Models card. This is visual polish only; model runtime behavior, Ollama API behavior, document retrieval, Learning Layer storage, and security boundaries are unchanged.
+
+Model selector polish notes: [docs/HALO_CONSOLE_V0_7_8_MODEL_SELECTOR_POLISH.md](docs/HALO_CONSOLE_V0_7_8_MODEL_SELECTOR_POLISH.md).
+
 ## Local Architecture
 
 - Browser UI: Next.js App Router page at `/`
