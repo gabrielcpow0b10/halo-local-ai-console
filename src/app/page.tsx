@@ -163,6 +163,13 @@ function modelDisplay(name: string) {
   return `${modelLabel(name)} - ${name}`;
 }
 
+function modelSortRank(name: string) {
+  if (name === "qwen3:4b") return 0;
+  if (name === "qwen3:14b") return 1;
+  if (name === "qwen3:30b-a3b") return 2;
+  return 3;
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("en", {
     month: "short",
@@ -630,6 +637,15 @@ export default function Home() {
     models.length > 0
       ? models
       : [{ name: DEFAULT_MODEL, size: 0, modified_at: "" }];
+  const displayedModels = useMemo(
+    () =>
+      [...models].sort(
+        (first, second) =>
+          modelSortRank(first.name) - modelSortRank(second.name) ||
+          first.name.localeCompare(second.name)
+      ),
+    [models]
+  );
   const savedSessions = useMemo(() => sessions.filter(isSavedSession), [sessions]);
   const selectedDocuments = useMemo(() => {
     const selectedIds = new Set(selectedDocumentIds);
@@ -1422,14 +1438,21 @@ export default function Home() {
           </button>
         </section>
 
-        <section className="sidebar-section">
+        <section className="sidebar-section models-box" aria-label="Models">
+          <div className="section-heading models-heading">
+            <p className="section-title">Models</p>
+            <span>
+              {models.length} installed
+            </span>
+          </div>
+
           <label className="model-label">
-            <span className="section-kicker">Active Model</span>
+            <span className="model-field-label">Active model</span>
             <select
               value={activeSession?.model ?? DEFAULT_MODEL}
               onChange={(event) => changeModel(event.target.value)}
             >
-              {availableModels.map((model) => (
+              {(models.length > 0 ? displayedModels : availableModels).map((model) => (
                 <option key={model.name} value={model.name}>
                   {modelDisplay(model.name)}
                 </option>
@@ -1439,23 +1462,15 @@ export default function Home() {
               New chats start with Quick. Saved chats keep their selected model.
             </p>
           </label>
-        </section>
 
-        <section className="sidebar-section models-box">
-          <div className="section-heading">
-            <p className="section-title">Installed Models</p>
-            <span>{models.length}</span>
-          </div>
           {models.length === 0 ? (
             <p className="muted">No models detected from Ollama.</p>
           ) : (
             <div className="model-list">
-              {models.map((model) => (
+              {displayedModels.map((model) => (
                 <div className="model-row" key={model.name}>
-                  <div>
-                    <strong>{modelLabel(model.name)}</strong>
-                    <p>{model.name}</p>
-                  </div>
+                  <strong>{modelLabel(model.name)}</strong>
+                  <p>{model.name}</p>
                   <span>{formatBytes(model.size)}</span>
                 </div>
               ))}
@@ -2042,7 +2057,7 @@ export default function Home() {
             </div>
             <div>
               <dt>Version</dt>
-              <dd>v0.7.7-local</dd>
+              <dd>v0.7.8-local</dd>
             </div>
           </dl>
         </section>
