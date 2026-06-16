@@ -42,6 +42,10 @@ v0.7.6-local note: the Documents panel now supports selected document scope. `Us
 
 Selected document scope notes: [docs/HALO_CONSOLE_V0_7_6_SELECTED_DOCUMENT_SCOPE.md](docs/HALO_CONSOLE_V0_7_6_SELECTED_DOCUMENT_SCOPE.md).
 
+v0.7.7-local note: Documents, selected document cards, HALO Learning Layer cards, source inspector chunks, upload/status messages, and composer toggles received local UI/UX polish. This is visual polish only; retrieval, PDF extraction, quality scoring, storage behavior, and security boundaries are unchanged.
+
+UI/UX polish notes: [docs/HALO_CONSOLE_V0_7_7_UI_UX_POLISH.md](docs/HALO_CONSOLE_V0_7_7_UI_UX_POLISH.md).
+
 ## Local Architecture
 
 - Browser UI: Next.js App Router page at `/`
