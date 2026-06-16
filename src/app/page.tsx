@@ -123,9 +123,9 @@ type MessageContentPart =
 const STORAGE_KEY = "halo-console-v0.2-sessions";
 const ACTIVE_KEY = "halo-console-v0.2-active-session";
 const DEFAULT_MODEL = "qwen3:4b";
-const DOCUMENT_READY_MESSAGE = "Ready for local context";
+const DOCUMENT_READY_MESSAGE = "Ready for local context.";
 const DOCUMENT_PARTIAL_MESSAGE = "Partial extraction";
-const PDF_UNAVAILABLE_MESSAGE = "PDF uploaded, extraction unavailable/failed.";
+const PDF_UNAVAILABLE_MESSAGE = "OCR not implemented.";
 const NO_DOCUMENT_CHUNKS_MESSAGE = "No relevant local document chunks found.";
 const GENERIC_UPLOAD_ERROR =
   "HALO could not read the upload response. Please try again.";
@@ -205,7 +205,7 @@ function extractionStatusLabel(status: DocumentRecord["extractionStatus"]) {
   if (status === "ready") return DOCUMENT_READY_MESSAGE;
   if (status === "partial") return DOCUMENT_PARTIAL_MESSAGE;
   if (status === "low_quality") return "Low-quality extraction";
-  if (status === "failed") return "No extractable text / OCR needed";
+  if (status === "failed") return "0 chunks";
   return "Extraction unavailable";
 }
 
@@ -261,7 +261,7 @@ function documentReadinessMessage(document: DocumentRecord) {
   }
 
   if (document.extractionStatus === "failed") {
-    return "No extractable text / OCR needed";
+    return "0 chunks";
   }
 
   if (document.type === "pdf") {
@@ -278,34 +278,34 @@ function documentReadinessMessage(document: DocumentRecord) {
     return DOCUMENT_READY_MESSAGE;
   }
 
-  if (document.chunkCount === 0) return "No extractable text / OCR needed";
+  if (document.chunkCount === 0) return "0 chunks";
 
   return DOCUMENT_READY_MESSAGE;
 }
 
 function uploadStatusMessage(document?: Partial<DocumentRecord>) {
-  if (!document) return "Document uploaded.";
+  if (!document) return "Uploaded.";
 
   if (document.extractionStatus === "partial") {
-    return "Document uploaded with partial readable text.";
+    return "Partial extraction.";
   }
 
   if (
     document.extractionStatus === "ready" &&
     (document.readableChunkCount ?? document.chunkCount ?? 0) > 0
   ) {
-    return "Document uploaded and ready for local context.";
+    return DOCUMENT_READY_MESSAGE;
   }
 
   if (document.extractionStatus === "low_quality") {
-    return "Document uploaded, but extracted text quality is too low for reliable local context. OCR is not implemented yet.";
+    return "Uploaded, but no readable chunks.";
   }
 
   if (document.extractionStatus === "failed") {
-    return "Document uploaded, but no extractable text was found. OCR is not implemented yet.";
+    return "OCR not implemented.";
   }
 
-  return "Document uploaded.";
+  return "Uploaded.";
 }
 
 function parseStoredSessions(value: string | null) {
@@ -1491,13 +1491,14 @@ export default function Home() {
             >
               {isUploadingDocument ? "Uploading" : "Upload"}
             </button>
-            <button
-              className="compact-button muted-action"
-              onClick={clearSelectedDocuments}
-              disabled={selectedDocumentCount === 0}
-            >
-              Clear selection
-            </button>
+            {selectedDocumentCount > 0 ? (
+              <button
+                className="compact-button muted-action"
+                onClick={clearSelectedDocuments}
+              >
+                Clear selection
+              </button>
+            ) : null}
           </div>
 
           <p className="document-status">{documentStatus}</p>
@@ -1541,7 +1542,7 @@ export default function Home() {
                         checked={isSelected}
                         onChange={() => toggleDocumentSelection(document.id)}
                       />
-                      <span>Select</span>
+                      <span>{isSelected ? "Selected" : "Select"}</span>
                     </label>
                     <div className="document-card-main">
                       <div className="document-summary">
@@ -1560,7 +1561,9 @@ export default function Home() {
                         </div>
                         {isLowQualityExtraction || isPartialExtraction ? (
                           <p className="document-inline-notice">
-                            {document.note ?? PDF_UNAVAILABLE_MESSAGE}
+                            {isLowQualityExtraction
+                              ? "Soft warning: details available."
+                              : "Partial text available."}
                           </p>
                         ) : null}
                       </div>
@@ -1628,6 +1631,11 @@ export default function Home() {
                           Top low-quality reason: {document.topLowQualityReason}
                         </p>
                       ) : null}
+                      {document.note ? (
+                        <p className="document-readiness">
+                          Note: {document.note}
+                        </p>
+                      ) : null}
                       <p className="document-readiness">
                         {readinessMessage}
                       </p>
@@ -1683,8 +1691,7 @@ export default function Home() {
           </div>
 
           <p className="memory-disclosure">
-            Learning notes are manual and local. Do not store secrets, passwords,
-            tokens, private paths, or full chat transcripts.
+            Manual and local. Do not store secrets or full transcripts.
           </p>
           <p className="memory-status">{memoryStatus}</p>
 
@@ -1713,7 +1720,7 @@ export default function Home() {
               onChange={(event) => setMemoryContent(event.target.value)}
               maxLength={800}
               placeholder="Short curated learning note..."
-              rows={4}
+              rows={3}
             />
             <input
               value={memorySourceLabel}
@@ -1726,7 +1733,7 @@ export default function Home() {
               className="compact-button"
               disabled={!memoryTitle.trim() || !memoryContent.trim() || isSavingMemory}
             >
-              {isSavingMemory ? "Saving" : "Add Learning Note"}
+              {isSavingMemory ? "Saving" : "Add Note"}
             </button>
           </form>
 
@@ -1761,13 +1768,11 @@ export default function Home() {
             <span>
               {selectedMemories.length} selected · {visibleMemories.length} visible
             </span>
-            <button
-              type="button"
-              onClick={clearSelectedMemories}
-              disabled={selectedMemoryIds.length === 0}
-            >
-              Clear
-            </button>
+            {selectedMemoryIds.length > 0 ? (
+              <button type="button" onClick={clearSelectedMemories}>
+                Clear
+              </button>
+            ) : null}
           </div>
 
           <section className="memory-preview" aria-label="Learning context preview">
@@ -1861,7 +1866,7 @@ export default function Home() {
                             }))
                           }
                           maxLength={800}
-                          rows={5}
+                          rows={4}
                           aria-label="Edit learning note content"
                         />
                         <input
@@ -1904,7 +1909,7 @@ export default function Home() {
                             checked={isSelected}
                             onChange={() => toggleMemorySelection(memory.id)}
                           />
-                          <span>Select</span>
+                          <span>{isSelected ? "Selected" : "Select"}</span>
                         </label>
                         <div className="memory-details">
                           <div className="memory-meta">
@@ -2037,7 +2042,7 @@ export default function Home() {
             </div>
             <div>
               <dt>Version</dt>
-              <dd>v0.7.6-local</dd>
+              <dd>v0.7.7-local</dd>
             </div>
           </dl>
         </section>
@@ -2121,7 +2126,7 @@ export default function Home() {
                 disabled={!localDocumentsEnabled}
                 onChange={(event) => setUseSelectedDocuments(event.target.checked)}
               />
-              <span>USE SELECTED DOCS ({selectedDocumentCount} selected)</span>
+              <span>USE SELECTED DOCS ({selectedDocumentCount} SELECTED)</span>
             </label>
             <label
               className={`search-toggle memory-chat-toggle ${
@@ -2135,7 +2140,7 @@ export default function Home() {
                 onChange={(event) => setUseSelectedMemory(event.target.checked)}
               />
               <span>
-                USE SELECTED LEARNING ({selectedMemoryCount} selected)
+                USE SELECTED LEARNING ({selectedMemoryCount} SELECTED)
               </span>
             </label>
           </div>
