@@ -2,6 +2,11 @@
 
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
+import {
+  normalizeRuntimeBridgeResponse,
+  type RuntimeBridgeResponse,
+} from "@/lib/halo/runtime-bridge";
+
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
@@ -17,6 +22,10 @@ type ChatMessage = {
   localMemory?: {
     enabled: boolean;
     usedEntries: number;
+  };
+  runtimeContext?: {
+    enabled: boolean;
+    used: boolean;
   };
 };
 
@@ -129,6 +138,11 @@ const PDF_UNAVAILABLE_MESSAGE = "OCR not implemented.";
 const NO_DOCUMENT_CHUNKS_MESSAGE = "No relevant local document chunks found.";
 const GENERIC_UPLOAD_ERROR =
   "HALO could not read the upload response. Please try again.";
+const DEFAULT_RUNTIME_BRIDGE = normalizeRuntimeBridgeResponse({
+  enabled: false,
+  status: "disabled",
+  message: "Runtime Bridge is not configured.",
+});
 
 const EMPTY_CHAT_TITLE = "New Chat";
 
@@ -343,6 +357,20 @@ function webSearchLabel(enabled: boolean, state: WebSearchState) {
   if (state === "not-configured") return "WEB SEARCH OFF - NOT CONFIGURED";
   if (state === "checking") return "CHECKING WEB SEARCH";
   return enabled ? "WEB SEARCH ON" : "WEB SEARCH OFF";
+}
+
+function runtimeBridgeLabel(status: RuntimeBridgeResponse["status"]) {
+  if (status === "disabled") return "Disabled";
+  if (status === "blocked") return "Blocked";
+  if (status === "warn") return "Review";
+  return "Active";
+}
+
+function runtimeBridgeClass(status: RuntimeBridgeResponse["status"]) {
+  if (status === "pass") return "pass";
+  if (status === "warn") return "warn";
+  if (status === "blocked") return "blocked";
+  return "disabled";
 }
 
 function parseLocalDocumentSources(value: string | null) {
@@ -580,6 +608,20 @@ function renderLocalMemoryIndicator(localMemory: NonNullable<ChatMessage["localM
   );
 }
 
+function renderRuntimeContextIndicator(
+  runtimeContext: NonNullable<ChatMessage["runtimeContext"]>
+) {
+  if (!runtimeContext.used) return null;
+
+  return (
+    <div className="runtime-context">
+      <div className="context-indicator active">
+        HOMELAB RUNTIME CONTEXT USED
+      </div>
+    </div>
+  );
+}
+
 export default function Home() {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeId, setActiveId] = useState("");
@@ -592,6 +634,9 @@ export default function Home() {
   const [localDocumentsEnabled, setLocalDocumentsEnabled] = useState(false);
   const [useSelectedDocuments, setUseSelectedDocuments] = useState(false);
   const [webSearchState, setWebSearchState] = useState<WebSearchState>("checking");
+  const [runtimeBridge, setRuntimeBridge] =
+    useState<RuntimeBridgeResponse>(DEFAULT_RUNTIME_BRIDGE);
+  const [useRuntimeContext, setUseRuntimeContext] = useState(false);
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [documentStatus, setDocumentStatus] = useState("No documents loaded.");
   const [documentQuestion, setDocumentQuestion] = useState("");
@@ -680,6 +725,11 @@ export default function Home() {
   const shouldUseSelectedMemory = useSelectedMemory && selectedMemoryCount > 0;
   const webSearchAvailable = webSearchState === "configured";
   const shouldUseWebSearch = webSearchEnabled && webSearchAvailable;
+  const runtimeContextAvailable =
+    runtimeBridge.contextAvailable &&
+    runtimeBridge.status !== "disabled" &&
+    runtimeBridge.status !== "blocked";
+  const shouldUseRuntimeContext = useRuntimeContext && runtimeContextAvailable;
   const activeSessionSaved = activeSession ? isSavedSession(activeSession) : false;
   const sessionStatusLabels = useMemo(() => {
     const labels: string[] = [];
@@ -701,6 +751,7 @@ export default function Home() {
     if (shouldUseSelectedMemory) {
       labels.push(`Selected learning enabled (${selectedMemoryCount})`);
     }
+    if (shouldUseRuntimeContext) labels.push("HomeLab runtime enabled");
 
     return labels;
   }, [
@@ -710,6 +761,7 @@ export default function Home() {
     selectedDocumentCount,
     selectedMemoryCount,
     shouldUseSelectedMemory,
+    shouldUseRuntimeContext,
     useSelectedDocuments,
   ]);
 
@@ -797,6 +849,26 @@ export default function Home() {
     } catch {
       setWebSearchState("not-configured");
       setWebSearchEnabled(false);
+    }
+
+    try {
+      const runtimeRes = await fetch("/api/runtime/status", { cache: "no-store" });
+      const runtimeData = await runtimeRes.json();
+      const nextRuntimeBridge = normalizeRuntimeBridgeResponse(runtimeData);
+      setRuntimeBridge(nextRuntimeBridge);
+      if (!nextRuntimeBridge.contextAvailable) {
+        setUseRuntimeContext(false);
+      }
+    } catch {
+      setRuntimeBridge(
+        normalizeRuntimeBridgeResponse({
+          enabled: true,
+          status: "warn",
+          message: "Runtime Bridge status unavailable.",
+          contextAvailable: false,
+        })
+      );
+      setUseRuntimeContext(false);
     }
   }
 
@@ -1279,6 +1351,9 @@ export default function Home() {
       localMemory: shouldUseSelectedMemory
         ? { enabled: true, usedEntries: 0 }
         : undefined,
+      runtimeContext: shouldUseRuntimeContext
+        ? { enabled: true, used: false }
+        : undefined,
     };
     const nextMessages = [...activeSession.messages, userMessage];
     const shouldUseLocalDocuments = localDocumentsEnabled;
@@ -1319,6 +1394,7 @@ export default function Home() {
           selectedDocumentIds: selectedDocumentIdsForChat,
           useSelectedMemory: shouldUseSelectedMemory,
           selectedMemoryIds: selectedMemoryIdsForChat,
+          useRuntimeContext: shouldUseRuntimeContext,
         }),
       });
 
@@ -1380,6 +1456,30 @@ export default function Home() {
             localMemory: {
               enabled: true,
               usedEntries: Number.isFinite(usedEntries) ? usedEntries : 0,
+            },
+          };
+
+          return {
+            ...session,
+            messages: updatedMessages,
+            updatedAt: new Date().toISOString(),
+          };
+        });
+      }
+
+      if (shouldUseRuntimeContext) {
+        const runtimeContextUsed =
+          response.headers.get("X-HALO-Runtime-Context-Used") === "true";
+
+        updateSession(sessionId, (session) => {
+          const updatedMessages = [...session.messages];
+          const last = updatedMessages[updatedMessages.length - 1];
+
+          updatedMessages[updatedMessages.length - 1] = {
+            ...last,
+            runtimeContext: {
+              enabled: true,
+              used: runtimeContextUsed,
             },
           };
 
@@ -1470,6 +1570,39 @@ export default function Home() {
           <button className="compact-button" onClick={refreshStatus}>
             Refresh
           </button>
+        </section>
+
+        <section
+          className="sidebar-section runtime-bridge"
+          aria-label="HomeLab Runtime Bridge"
+        >
+          <div className="runtime-bridge-heading">
+            <div>
+              <p className="section-title">HomeLab Runtime</p>
+            </div>
+            <span
+              className={`runtime-bridge-pill ${runtimeBridgeClass(
+                runtimeBridge.status
+              )}`}
+            >
+              {runtimeBridgeLabel(runtimeBridge.status)}
+            </span>
+          </div>
+          <dl className="runtime-bridge-status">
+            <div>
+              <dt>Status</dt>
+              <dd>{runtimeBridgeLabel(runtimeBridge.status)}</dd>
+            </div>
+            <div>
+              <dt>Mode</dt>
+              <dd>Read-only</dd>
+            </div>
+          </dl>
+          {runtimeBridge.lastUpdated ? (
+            <p className="runtime-bridge-updated">
+              Updated {formatMemoryDate(runtimeBridge.lastUpdated)}
+            </p>
+          ) : null}
         </section>
 
         <section className="sidebar-section models-box" aria-label="Models">
@@ -2091,7 +2224,7 @@ export default function Home() {
             </div>
             <div>
               <dt>Version</dt>
-              <dd>v0.7.9-local</dd>
+              <dd>v0.8.1-local</dd>
             </div>
           </dl>
         </section>
@@ -2145,6 +2278,9 @@ export default function Home() {
                 ) : null}
                 {message.role === "assistant" && message.localMemory?.enabled ? (
                   renderLocalMemoryIndicator(message.localMemory)
+                ) : null}
+                {message.role === "assistant" && message.runtimeContext?.enabled ? (
+                  renderRuntimeContextIndicator(message.runtimeContext)
                 ) : null}
               </div>
             ))
@@ -2202,6 +2338,19 @@ export default function Home() {
               <span>
                 USE SELECTED LEARNING ({selectedMemoryCount} SELECTED)
               </span>
+            </label>
+            <label
+              className={`search-toggle runtime-chat-toggle ${
+                runtimeContextAvailable ? "" : "inactive"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={shouldUseRuntimeContext}
+                disabled={!runtimeContextAvailable}
+                onChange={(event) => setUseRuntimeContext(event.target.checked)}
+              />
+              <span>USE HOMELAB RUNTIME</span>
             </label>
           </div>
           <textarea
