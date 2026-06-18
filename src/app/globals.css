@@ -588,6 +588,85 @@ textarea:focus {
   color: #86efac;
 }
 
+.runtime-bridge {
+  display: grid;
+  gap: 9px;
+}
+
+.runtime-bridge-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.runtime-bridge-disclosure,
+.runtime-bridge-updated {
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.runtime-bridge-pill {
+  flex: 0 0 auto;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.5);
+  padding: 4px 8px;
+  color: #cbd5e1;
+  font-size: 0.68rem;
+  font-weight: 850;
+  line-height: 1.15;
+}
+
+.runtime-bridge-pill.pass {
+  border-color: rgba(34, 197, 94, 0.35);
+  background: rgba(20, 83, 45, 0.2);
+  color: #a7f3c1;
+}
+
+.runtime-bridge-pill.warn {
+  border-color: rgba(245, 158, 11, 0.32);
+  background: rgba(146, 64, 14, 0.14);
+  color: #f4d18a;
+}
+
+.runtime-bridge-pill.blocked {
+  border-color: rgba(251, 113, 133, 0.34);
+  background: rgba(127, 29, 29, 0.18);
+  color: #fecdd3;
+}
+
+.runtime-bridge-status {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+}
+
+.runtime-bridge-status div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.runtime-bridge-status dt,
+.runtime-bridge-status dd {
+  margin: 0;
+  font-size: 0.76rem;
+}
+
+.runtime-bridge-status dt {
+  color: var(--dim);
+}
+
+.runtime-bridge-status dd {
+  color: var(--foreground);
+  font-weight: 800;
+  text-align: right;
+}
+
 .documents-box,
 .memory-box {
   display: grid;
@@ -1127,7 +1206,8 @@ textarea:focus {
 }
 
 .local-docs-context,
-.local-memory-context {
+.local-memory-context,
+.runtime-context {
   display: grid;
   gap: 7px;
   margin-bottom: 8px;

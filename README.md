@@ -2,11 +2,11 @@
 
 HALO Console is a local-first AI workbench for chatting with Ollama models from a polished browser interface. It is built with Next.js, TypeScript, and a small HALO API layer that keeps model calls, uploaded documents, and manually curated learning notes under local user control.
 
-This repository is published as a sanitized `v0.7.9` public preview. It is intended to show the architecture, interface shape, and local-first product direction without including private runtime data, uploaded files, secrets, screenshots, or environment-specific configuration.
+This repository is published as a sanitized `v0.8.2-local` public preview. It is intended to show the architecture, interface shape, and local-first product direction without including private runtime data, uploaded files, secrets, screenshots, or environment-specific configuration.
 
-## v0.7.9 Public Preview
+## v0.8.2-local Public Preview
 
-The v0.7.9 preview focuses on a complete local chat workflow:
+The v0.8.2-local preview focuses on a complete local chat workflow:
 
 - Local streaming chat through Ollama.
 - Quick, Daily, and Heavy model labels for local model selection and routing.
@@ -16,8 +16,10 @@ The v0.7.9 preview focuses on a complete local chat workflow:
 - Source and chunk inspector UI for answers that use local document context.
 - HALO Learning Layer for manual, user-curated local notes.
 - Explicit selected learning context injection.
+- Minimal HomeLab Runtime status in the sidebar, with detailed runtime context available only through chat when explicitly enabled.
 - Web Search UI and route foundation kept disabled unless configured by the operator.
 - Clear local-first security boundaries and no required cloud APIs.
+- Runtime-enabled HomeLab questions answer from concrete public-safe status facts when available, with concise English or Spanish phrasing suitable for future voice use.
 
 Release notes: [docs/RELEASE_NOTES_V0_7_9.md](docs/RELEASE_NOTES_V0_7_9.md)
 
@@ -48,6 +50,7 @@ At a code level:
 - Router decision endpoint: `/api/router`.
 - Local documents: `/api/documents/upload`, `/api/documents/list`, `/api/documents/query`, and `/api/documents/delete`.
 - Learning Layer: `/api/memory/list`, `/api/memory/create`, `/api/memory/update`, and `/api/memory/delete`.
+- Runtime Bridge: `/api/runtime/status`, disabled unless `HALO_RUNTIME_PUBLIC_SAFE_REPORT` points to one public-safe report file.
 - Web Search foundation: `/api/search`, disabled/not configured by default.
 
 The browser does not receive provider credentials, local filesystem paths, shell access, or arbitrary private-file access. Uploaded documents and learning notes are stored only in HALO-controlled local storage directories on the machine running the app.
@@ -74,6 +77,8 @@ Heavy -> qwen3:30b-a3b
 
 Chat responses stream from Ollama through `/api/chat`. Chat sessions are stored in browser `localStorage`, not in a server-side transcript database. The UI includes compact saved-chat cards, active session status, empty and loading states, and explicit context toggles for local documents, selected documents, and selected learning.
 
+The chat composer also includes `USE HOMELAB RUNTIME`. When enabled and the Runtime Bridge is available, HALO can use the configured public-safe runtime summary as private-safe context for questions such as "HALO, how is my HomeLab today?" or "HALO, como esta mi HomeLab hoy?". Runtime-enabled chat can answer overall HomeLab status, node health, temperature, memory, disk, Docker or service counts, safety boundary questions, and whether anything needs review. Specific metric questions are answered directly without dumping the full report. Runtime details are not shown automatically and are not displayed as a sidebar document.
+
 ## Local Documents
 
 The Documents panel supports local uploads for generic `.txt`, `.md`, `.log`, and `.pdf` files. Text files are decoded locally. Text-based PDFs are extracted, chunked, quality-scored, and stored under HALO-controlled local document storage.
@@ -91,6 +96,33 @@ The HALO Learning Layer is a manual local note system. Users can create, edit, f
 Learning is not automatic. HALO Console does not train on conversations, auto-save chat transcripts, mine user messages for memory, or inject every saved note into prompts.
 
 When `Use Selected Learning` is enabled, the browser sends selected learning note ids to `/api/chat`. The server validates those ids, resolves them against HALO-controlled local storage, and injects only a capped `SELECTED LEARNING CONTEXT` section. Learning notes are treated as supporting context, not as credentials, hidden instructions, policy, or a source of truth over uploaded documents.
+
+## Runtime Bridge
+
+Runtime Bridge is optional and disabled by default. It provides read-only chat context from one public-safe local report file generated outside HALO Console.
+
+Configure it with a placeholder-style absolute file path in local environment only:
+
+```bash
+HALO_RUNTIME_PUBLIC_SAFE_REPORT=/absolute/path/to/public-safe-demo-summary.local.md
+```
+
+Safety boundaries:
+
+- Reads only the single file path configured by `HALO_RUNTIME_PUBLIC_SAFE_REPORT`.
+- Does not accept report paths from browser query strings or request bodies.
+- The browser can request runtime context only with a boolean chat flag.
+- Does not list directories.
+- Does not execute shell commands.
+- Does not SSH.
+- Does not read arbitrary files.
+- Rejects symbolic links, non-file paths, reports larger than 64 KB, and reports containing private markers.
+- The sidebar shows only a compact `HomeLab Runtime` status card: status, read-only mode, and optional timestamp.
+- The sidebar does not render the runtime markdown report, raw report, paths, hostnames, IPs, ports, usernames, tokens, secrets, or detailed runtime content.
+- Detailed runtime information is requested conversationally through chat and only used when `USE HOMELAB RUNTIME` is enabled.
+- Public setup should point first to a public-safe demo summary, not private raw runtime reports.
+
+Runtime answers are worded to be concise and naturally spoken when the user asks for quick, short, spoken, or voice-style output. Future HALO direction includes a local "Hey HALO" style voice assistant mode, but voice input and wake-word behavior are not implemented in this preview.
 
 ## Web Search
 
@@ -149,6 +181,8 @@ curl http://localhost:3030/api/memory/list
 - No arbitrary local file browser.
 - Documents enter through browser upload or multipart API upload.
 - Document and learning APIs use ids, not local filesystem paths.
+- Runtime Bridge is disabled unless configured with one allowlisted public-safe report file.
+- Runtime Bridge does not execute commands, SSH, list directories, or accept browser-supplied paths.
 - Local document context is opt-in per browser session.
 - Selected document scope is explicit and id-based.
 - Selected learning context is explicit and capped.
