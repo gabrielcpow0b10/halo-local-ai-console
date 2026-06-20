@@ -2,7 +2,7 @@
 
 This roadmap keeps HALO Console local-first, Ollama-centered, and public-preview safe. Items here are not commitments to add cloud APIs, hosted model providers, enabled Web Search, or automation with shell access.
 
-## v0.7.9 Public Preview
+## v0.8 Public Preview
 
 Current public preview scope:
 
@@ -14,6 +14,7 @@ Current public preview scope:
 - Source/chunk inspector UI for local document context.
 - Manual HALO Learning Layer notes with selected-note context injection.
 - Web Search route/provider foundation present but disabled unless configured.
+- Optional read-only Runtime Bridge, disabled by default and limited to one operator-configured public-safe report file.
 - Public documentation for architecture, release notes, roadmap, and security boundaries.
 
 ## Near-Term Local Improvements

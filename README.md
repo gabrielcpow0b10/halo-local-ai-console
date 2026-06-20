@@ -2,11 +2,11 @@
 
 HALO Console is a local-first AI workbench for chatting with Ollama models from a polished browser interface. It is built with Next.js, TypeScript, and a small HALO API layer that keeps model calls, uploaded documents, and manually curated learning notes under local user control.
 
-This repository is published as a sanitized `v0.8.2-local` public preview. It is intended to show the architecture, interface shape, and local-first product direction without including private runtime data, uploaded files, secrets, screenshots, or environment-specific configuration.
+This repository is published as a sanitized `v0.8 Public Preview`. It is intended to show the architecture, interface shape, and local-first product direction without including private runtime data, uploaded files, secrets, screenshots, or environment-specific configuration.
 
-## v0.8.2-local Public Preview
+## v0.8 Public Preview
 
-The v0.8.2-local preview focuses on a complete local chat workflow:
+The v0.8 public preview focuses on a complete local chat workflow:
 
 - Local streaming chat through Ollama.
 - Quick, Daily, and Heavy model labels for local model selection and routing.
@@ -21,7 +21,7 @@ The v0.8.2-local preview focuses on a complete local chat workflow:
 - Clear local-first security boundaries and no required cloud APIs.
 - Runtime-enabled HomeLab questions answer from concrete public-safe status facts when available, with concise English or Spanish phrasing suitable for future voice use.
 
-Release notes: [docs/RELEASE_NOTES_V0_7_9.md](docs/RELEASE_NOTES_V0_7_9.md)
+Release notes: [docs/RELEASE_NOTES_V0_8.md](docs/RELEASE_NOTES_V0_8.md)
 
 Roadmap: [docs/ROADMAP.md](docs/ROADMAP.md)
 
