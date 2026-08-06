@@ -146,11 +146,41 @@ const DEFAULT_RUNTIME_BRIDGE = normalizeRuntimeBridgeResponse({
 
 const EMPTY_CHAT_TITLE = "New Chat";
 
+function createClientSessionId() {
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.randomUUID === "function"
+  ) {
+    return crypto.randomUUID();
+  }
+
+  const fallback = new Uint8Array(16);
+
+  if (
+    typeof crypto !== "undefined" &&
+    typeof crypto.getRandomValues === "function"
+  ) {
+    crypto.getRandomValues(fallback);
+    fallback[6] = (fallback[6] & 0x0f) | 0x40;
+    fallback[8] = (fallback[8] & 0x3f) | 0x80;
+
+    const hex = Array.from(fallback, (byte) =>
+      byte.toString(16).padStart(2, "0")
+    ).join("");
+
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  return `halo-session-${Date.now().toString(36)}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
+}
+
 function createSession(model = DEFAULT_MODEL): ChatSession {
   const now = new Date().toISOString();
 
   return {
-    id: crypto.randomUUID(),
+    id: createClientSessionId(),
     title: EMPTY_CHAT_TITLE,
     model,
     messages: [],
