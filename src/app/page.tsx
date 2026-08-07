@@ -384,9 +384,9 @@ function isSavedSession(session: ChatSession) {
 }
 
 function webSearchLabel(enabled: boolean, state: WebSearchState) {
-  if (state === "not-configured") return "WEB SEARCH OFF - NOT CONFIGURED";
-  if (state === "checking") return "CHECKING WEB SEARCH";
-  return enabled ? "WEB SEARCH ON" : "WEB SEARCH OFF";
+  if (state === "not-configured") return "Web unavailable";
+  if (state === "checking") return "Checking web";
+  return enabled ? "Web on" : "Web off";
 }
 
 function runtimeBridgeLabel(status: RuntimeBridgeResponse["status"]) {
@@ -2341,7 +2341,7 @@ export default function Home() {
                 checked={localDocumentsEnabled}
                 onChange={(event) => setLocalDocumentsEnabled(event.target.checked)}
               />
-              <span>USE LOCAL DOCS</span>
+              <span>Local Docs</span>
             </label>
             <label
               className={`search-toggle selected-docs-toggle ${
@@ -2354,7 +2354,7 @@ export default function Home() {
                 disabled={!localDocumentsEnabled}
                 onChange={(event) => setUseSelectedDocuments(event.target.checked)}
               />
-              <span>USE SELECTED DOCS ({selectedDocumentCount} SELECTED)</span>
+              <span>Selected Docs ({selectedDocumentCount})</span>
             </label>
             <label
               className={`search-toggle memory-chat-toggle ${
@@ -2367,9 +2367,7 @@ export default function Home() {
                 disabled={selectedMemoryCount === 0}
                 onChange={(event) => setUseSelectedMemory(event.target.checked)}
               />
-              <span>
-                USE SELECTED LEARNING ({selectedMemoryCount} SELECTED)
-              </span>
+              <span>Learning ({selectedMemoryCount})</span>
             </label>
             <label
               className={`search-toggle runtime-chat-toggle ${
@@ -2382,7 +2380,7 @@ export default function Home() {
                 disabled={!runtimeContextAvailable}
                 onChange={(event) => setUseRuntimeContext(event.target.checked)}
               />
-              <span>USE HOMELAB RUNTIME</span>
+              <span>HomeLab Runtime</span>
             </label>
           </div>
           <textarea
