@@ -2336,7 +2336,7 @@ export default function Home() {
               <input
                 type="checkbox"
                 checked={useSelectedDocuments}
-                disabled={!localDocumentsEnabled}
+                disabled={!mounted || !localDocumentsEnabled}
                 onChange={(event) => setUseSelectedDocuments(event.target.checked)}
               />
               <span>Selected Docs ({selectedDocumentCount})</span>
@@ -2349,7 +2349,7 @@ export default function Home() {
               <input
                 type="checkbox"
                 checked={useSelectedMemory}
-                disabled={selectedMemoryCount === 0}
+                disabled={!mounted || selectedMemoryCount === 0}
                 onChange={(event) => setUseSelectedMemory(event.target.checked)}
               />
               <span>Learning ({selectedMemoryCount})</span>
