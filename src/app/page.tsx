@@ -384,9 +384,9 @@ function isSavedSession(session: ChatSession) {
 }
 
 function webSearchLabel(enabled: boolean, state: WebSearchState) {
-  if (state === "not-configured") return "WEB SEARCH OFF - NOT CONFIGURED";
-  if (state === "checking") return "CHECKING WEB SEARCH";
-  return enabled ? "WEB SEARCH ON" : "WEB SEARCH OFF";
+  if (state === "not-configured") return "Web unavailable";
+  if (state === "checking") return "Checking web";
+  return enabled ? "Web on" : "Web off";
 }
 
 function runtimeBridgeLabel(status: RuntimeBridgeResponse["status"]) {
@@ -699,6 +699,7 @@ export default function Home() {
   });
   const [isUpdatingMemory, setIsUpdatingMemory] = useState(false);
   const [hasLoadedLocalData, setHasLoadedLocalData] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -818,6 +819,7 @@ export default function Home() {
 
       setAppHost(window.location.host);
       setHasLoadedLocalData(true);
+      setMounted(true);
     });
 
     refreshStatus();
@@ -1577,11 +1579,8 @@ export default function Home() {
     <main className="halo-shell">
       <aside className="sidebar" aria-label="HALO Console controls">
         <div className="brand">
-          <div>
-            <p className="eyebrow">HALO Brain Node</p>
-            <h1>HALO Console</h1>
-          </div>
-          <p className="subtitle">Local AI console for Ollama on a user-controlled node.</p>
+          <h1>HALO</h1>
+          <p className="subtitle">Your local AI workspace.</p>
         </div>
 
         <button className="primary-button" onClick={newChat}>
@@ -1589,50 +1588,17 @@ export default function Home() {
           New Chat
         </button>
 
-        <section className="sidebar-section status-card" aria-label="Ollama status">
+        <section className="sidebar-section status-card" aria-label="Local AI status">
           <div className="status-main">
             <span className={`dot ${health === "online" ? "green" : "red"}`} />
             <div>
-              <p className="section-kicker">Ollama Status</p>
+              <p className="section-kicker">Local AI</p>
               <strong>{health === "checking" ? "Checking" : health}</strong>
             </div>
           </div>
           <button className="compact-button" onClick={refreshStatus}>
             Refresh
           </button>
-        </section>
-
-        <section
-          className="sidebar-section runtime-bridge"
-          aria-label="HomeLab Runtime Bridge"
-        >
-          <div className="runtime-bridge-heading">
-            <div>
-              <p className="section-title">HomeLab Runtime</p>
-            </div>
-            <span
-              className={`runtime-bridge-pill ${runtimeBridgeClass(
-                runtimeBridge.status
-              )}`}
-            >
-              {runtimeBridgeLabel(runtimeBridge.status)}
-            </span>
-          </div>
-          <dl className="runtime-bridge-status">
-            <div>
-              <dt>Status</dt>
-              <dd>{runtimeBridgeLabel(runtimeBridge.status)}</dd>
-            </div>
-            <div>
-              <dt>Mode</dt>
-              <dd>Read-only</dd>
-            </div>
-          </dl>
-          {runtimeBridge.lastUpdated ? (
-            <p className="runtime-bridge-updated">
-              Updated {formatMemoryDate(runtimeBridge.lastUpdated)}
-            </p>
-          ) : null}
         </section>
 
         <section className="sidebar-section models-box" aria-label="Models">
@@ -1655,28 +1621,28 @@ export default function Home() {
                 </option>
               ))}
             </select>
-            <p className="model-helper">
-              New chats start with Quick. Saved chats keep their selected model.
-            </p>
           </label>
 
           {models.length === 0 ? (
-            <p className="muted">No models detected from Ollama.</p>
+            <p className="muted">No local models detected.</p>
           ) : (
-            <div className="model-list">
-              {displayedModels.map((model) => (
-                <div className="model-row" key={model.name}>
-                  <strong>{modelLabel(model.name)}</strong>
-                  <p>{model.name}</p>
-                  <span>{formatBytes(model.size)}</span>
-                </div>
-              ))}
-            </div>
+            <details className="model-details">
+              <summary>Installed models</summary>
+              <div className="model-list">
+                {displayedModels.map((model) => (
+                  <div className="model-row" key={model.name}>
+                    <strong>{modelLabel(model.name)}</strong>
+                    <p>{model.name}</p>
+                    <span>{formatBytes(model.size)}</span>
+                  </div>
+                ))}
+              </div>
+            </details>
           )}
         </section>
 
-        <section className="sidebar-section documents-box" aria-label="Documents">
-          <div className="section-heading">
+        <details className="sidebar-section sidebar-disclosure" aria-label="Documents">
+          <summary className="section-heading">
             <p className="section-title">Documents</p>
             <div className="section-counts">
               <span aria-label={`${documents.length} uploaded local documents`}>
@@ -1686,7 +1652,8 @@ export default function Home() {
                 {selectedDocumentCount} selected
               </span>
             </div>
-          </div>
+          </summary>
+          <div className="disclosure-content documents-box">
 
           <div className="document-actions">
             <input
@@ -1892,15 +1859,17 @@ export default function Home() {
               ))}
             </div>
           ) : null}
-        </section>
+          </div>
+        </details>
 
-        <section className="sidebar-section memory-box" aria-label="HALO Learning Layer">
-          <div className="section-heading">
-            <p className="section-title">HALO Learning Layer</p>
+        <details className="sidebar-section sidebar-disclosure" aria-label="Learning">
+          <summary className="section-heading">
+            <p className="section-title">Learning</p>
             <span aria-label={`${memories.length} manual local learning notes`}>
               {memories.length}
             </span>
-          </div>
+          </summary>
+          <div className="disclosure-content memory-box">
 
           <p className="memory-disclosure">
             Manual and local. Do not store secrets or full transcripts.
@@ -2186,7 +2155,8 @@ export default function Home() {
               })
             )}
           </div>
-        </section>
+          </div>
+        </details>
 
         <section className="sidebar-section history">
           <div className="section-heading">
@@ -2229,35 +2199,52 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="sidebar-section danger-zone" aria-label="Danger zone">
-          <div>
-            <p className="section-title">Danger Zone</p>
-            <p className="muted">Clear saved chats and HALO Console browser data.</p>
-          </div>
-          <button onClick={resetLocalData}>Reset Local Data</button>
-        </section>
+        <details className="sidebar-section sidebar-disclosure advanced-section">
+          <summary className="section-heading">
+            <p className="section-title">Advanced</p>
+          </summary>
+          <div className="disclosure-content advanced-content">
+            <section className="runtime-bridge" aria-label="HomeLab Runtime Bridge">
+              <div className="runtime-bridge-heading">
+                <p className="section-title">HomeLab Runtime</p>
+                <span
+                  className={`runtime-bridge-pill ${runtimeBridgeClass(
+                    runtimeBridge.status
+                  )}`}
+                >
+                  {runtimeBridgeLabel(runtimeBridge.status)}
+                </span>
+              </div>
+              <dl className="runtime-bridge-status">
+                <div><dt>Status</dt><dd>{runtimeBridgeLabel(runtimeBridge.status)}</dd></div>
+                <div><dt>Mode</dt><dd>Read-only</dd></div>
+              </dl>
+              {runtimeBridge.lastUpdated ? (
+                <p className="runtime-bridge-updated">
+                  Updated {formatMemoryDate(runtimeBridge.lastUpdated)}
+                </p>
+              ) : null}
+            </section>
 
-        <section className="node-info" aria-label="Node information">
-          <p className="section-title">Node Information</p>
-          <dl>
-            <div>
-              <dt>Node</dt>
-              <dd>local-node</dd>
-            </div>
-            <div>
-              <dt>Mode</dt>
-              <dd>local-first</dd>
-            </div>
-            <div>
-              <dt>App Host</dt>
-              <dd>{appHost}</dd>
-            </div>
-            <div>
-              <dt>Version</dt>
-              <dd>v0.8.1-local</dd>
-            </div>
-          </dl>
-        </section>
+            <section className="node-info" aria-label="Node information">
+              <p className="section-title">Node Information</p>
+              <dl>
+                <div><dt>Node</dt><dd>local-node</dd></div>
+                <div><dt>Mode</dt><dd>local-first</dd></div>
+                <div><dt>App Host</dt><dd>{appHost}</dd></div>
+                <div><dt>Version</dt><dd>v0.8.1-local</dd></div>
+              </dl>
+            </section>
+
+            <section className="danger-zone" aria-label="Danger zone">
+              <div>
+                <p className="section-title">Danger Zone</p>
+                <p className="muted">Clear saved chats and browser data.</p>
+              </div>
+              <button onClick={resetLocalData}>Reset Local Data</button>
+            </section>
+          </div>
+        </details>
       </aside>
 
       <section className="chat-panel" aria-label="Chat session">
@@ -2278,7 +2265,7 @@ export default function Home() {
             </span>
             <button
               onClick={clearActiveChat}
-              disabled={(activeSession?.messages.length ?? 0) === 0}
+              disabled={!mounted || (activeSession?.messages.length ?? 0) === 0}
               title="Clears only the current chat messages"
             >
               Clear Chat
@@ -2339,7 +2326,7 @@ export default function Home() {
                 checked={localDocumentsEnabled}
                 onChange={(event) => setLocalDocumentsEnabled(event.target.checked)}
               />
-              <span>USE LOCAL DOCS</span>
+              <span>Local Docs</span>
             </label>
             <label
               className={`search-toggle selected-docs-toggle ${
@@ -2349,10 +2336,10 @@ export default function Home() {
               <input
                 type="checkbox"
                 checked={useSelectedDocuments}
-                disabled={!localDocumentsEnabled}
+                disabled={!mounted || !localDocumentsEnabled}
                 onChange={(event) => setUseSelectedDocuments(event.target.checked)}
               />
-              <span>USE SELECTED DOCS ({selectedDocumentCount} SELECTED)</span>
+              <span>Selected Docs ({selectedDocumentCount})</span>
             </label>
             <label
               className={`search-toggle memory-chat-toggle ${
@@ -2362,12 +2349,10 @@ export default function Home() {
               <input
                 type="checkbox"
                 checked={useSelectedMemory}
-                disabled={selectedMemoryCount === 0}
+                disabled={!mounted || selectedMemoryCount === 0}
                 onChange={(event) => setUseSelectedMemory(event.target.checked)}
               />
-              <span>
-                USE SELECTED LEARNING ({selectedMemoryCount} SELECTED)
-              </span>
+              <span>Learning ({selectedMemoryCount})</span>
             </label>
             <label
               className={`search-toggle runtime-chat-toggle ${
@@ -2380,7 +2365,7 @@ export default function Home() {
                 disabled={!runtimeContextAvailable}
                 onChange={(event) => setUseRuntimeContext(event.target.checked)}
               />
-              <span>USE HOMELAB RUNTIME</span>
+              <span>HomeLab Runtime</span>
             </label>
           </div>
           <textarea
