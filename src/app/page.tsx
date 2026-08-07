@@ -699,6 +699,7 @@ export default function Home() {
   });
   const [isUpdatingMemory, setIsUpdatingMemory] = useState(false);
   const [hasLoadedLocalData, setHasLoadedLocalData] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -818,6 +819,7 @@ export default function Home() {
 
       setAppHost(window.location.host);
       setHasLoadedLocalData(true);
+      setMounted(true);
     });
 
     refreshStatus();
@@ -2278,7 +2280,7 @@ export default function Home() {
             </span>
             <button
               onClick={clearActiveChat}
-              disabled={(activeSession?.messages.length ?? 0) === 0}
+              disabled={!mounted || (activeSession?.messages.length ?? 0) === 0}
               title="Clears only the current chat messages"
             >
               Clear Chat
