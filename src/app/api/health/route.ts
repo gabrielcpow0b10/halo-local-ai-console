@@ -14,7 +14,7 @@ export async function GET() {
 
   return Response.json({
     app: "HALO Console",
-    version: "0.7.9-local",
+    version: "0.8.0",
     status: "ok",
     ollama,
     ollamaUrl: OLLAMA_URL,
