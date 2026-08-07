@@ -163,6 +163,49 @@ h2 {
   margin-bottom: 8px;
 }
 
+.sidebar-disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+  margin-bottom: 0;
+}
+
+.sidebar-disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+.sidebar-disclosure > summary::after {
+  content: "+";
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.sidebar-disclosure[open] > summary::after {
+  content: "−";
+}
+
+.sidebar-disclosure[open] > summary {
+  margin-bottom: 8px;
+}
+
+.disclosure-content {
+  border-top: 1px solid rgba(93, 177, 220, 0.1);
+  padding-top: 8px;
+}
+
+.advanced-content {
+  display: grid;
+  gap: 8px;
+}
+
+.advanced-content > section {
+  border: 1px solid rgba(93, 177, 220, 0.1);
+  border-radius: 9px;
+  background: rgba(2, 8, 20, 0.28);
+  padding: 8px;
+}
+
 .section-counts {
   display: flex;
   flex: 0 0 auto;
@@ -332,6 +375,16 @@ textarea:focus {
   display: grid;
   gap: 5px;
   margin-top: 10px;
+}
+
+.model-details {
+  margin-top: 8px;
+  color: var(--dim);
+  font-size: 0.72rem;
+}
+
+.model-details summary {
+  cursor: pointer;
 }
 
 .model-row {
