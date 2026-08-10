@@ -7,7 +7,7 @@ import {
   parseRuntimeReportStatus,
   RUNTIME_REPORT_ENV,
   RUNTIME_REPORT_MAX_BYTES,
-} from "@/lib/halo/runtime-bridge";
+} from "../../../../lib/halo/runtime-bridge";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
