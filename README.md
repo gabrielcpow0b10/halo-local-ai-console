@@ -2,6 +2,10 @@
 
 HALO Console is a local-first AI workbench for chatting with Ollama models from a polished browser interface. It is built with Next.js, TypeScript, and a small HALO API layer that keeps model calls, uploaded documents, and manually curated learning notes under local user control.
 
+> Part of the **HALO AgentOps system** — see [SYSTEM.md](SYSTEM.md).
+> Related repos: [Toolkit](https://github.com/gabrielcpow0b10/homelab-agentops) ·
+> [Control Plane](https://github.com/gabrielcpow0b10/homelab-agentops-control-plane) · [Mini Lab](https://github.com/gabrielcpow0b10/halo-light-mini-lab)
+
 This repository is published as a sanitized `v0.8 Public Preview`. It is intended to show the architecture, interface shape, and local-first product direction without including private runtime data, uploaded files, secrets, screenshots, or environment-specific configuration.
 
 ## v0.8 Public Preview
