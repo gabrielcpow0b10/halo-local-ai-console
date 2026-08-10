@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "check:env": "node scripts/check-env-contract.mjs",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run"
