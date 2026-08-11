@@ -1,6 +1,6 @@
 # Security Boundaries
 
-HALO Console v0.4a is a local-first Ollama console. The public export is designed to show the architecture without exposing private operational details or adding remote execution surfaces.
+HALO Console v0.8 is a local-first Ollama console. The public export is designed to show the architecture without exposing private operational details or adding remote execution surfaces.
 
 ## Included Boundary
 

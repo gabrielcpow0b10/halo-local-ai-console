@@ -67,8 +67,10 @@ The bridge is read-only and adds no monitoring, automation, or administrative ca
 Release preparation checks:
 
 ```bash
+npm run check:env
+npm test
 npm run lint
 npm run build
-npm audit --omit=dev
+npm audit
 git diff --check
 ```

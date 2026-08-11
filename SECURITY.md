@@ -6,7 +6,7 @@ HALO Console is a local-first AI console designed to run on user-controlled infr
 
 | Version | Supported |
 | --- | --- |
-| v0.4a.x public preview | Yes |
+| v0.8.x public preview | Yes |
 | Earlier public previews | Best effort |
 
 ## Reporting a Vulnerability
