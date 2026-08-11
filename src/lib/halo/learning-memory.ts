@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
-import path from "path";
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import path from "node:path";
 
 export const LEARNING_MEMORY_TYPES = [
   "project_note",
@@ -23,7 +24,6 @@ export type LearningMemoryEntry = {
 };
 
 const MEMORY_DIR = path.join(process.cwd(), ".halo-memory");
-const MEMORY_FILE = path.join(MEMORY_DIR, "entries.json");
 const MAX_TITLE_LENGTH = 80;
 const MAX_CONTENT_LENGTH = 800;
 const MAX_SOURCE_LABEL_LENGTH = 80;
@@ -92,98 +92,177 @@ function isLearningMemoryEntry(value: unknown): value is LearningMemoryEntry {
   );
 }
 
-async function ensureMemoryStore() {
-  await mkdir(MEMORY_DIR, { recursive: true });
+function isMissingFileError(error: unknown) {
+  return (
+    error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "ENOENT"
+  );
 }
 
-async function writeLearningMemories(entries: LearningMemoryEntry[]) {
-  await ensureMemoryStore();
-  await writeFile(MEMORY_FILE, `${JSON.stringify(entries, null, 2)}\n`, "utf8");
+function parseLearningMemories(raw: string, strict = false) {
+  const parsed: unknown = JSON.parse(raw);
+
+  if (!Array.isArray(parsed)) {
+    throw new Error("Learning memory store must contain a JSON array.");
+  }
+
+  if (strict && !parsed.every(isLearningMemoryEntry)) {
+    throw new Error("Learning memory store contains an invalid entry.");
+  }
+
+  return parsed.filter(isLearningMemoryEntry).sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt)
+  );
 }
 
-export async function listLearningMemories() {
-  try {
-    const raw = await readFile(MEMORY_FILE, "utf8");
-    const parsed = JSON.parse(raw);
+export function createLearningMemoryStore(memoryDirectory: string) {
+  const memoryFile = path.join(memoryDirectory, "entries.json");
+  let mutationTail: Promise<void> = Promise.resolve();
 
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter(isLearningMemoryEntry).sort((a, b) =>
-      b.updatedAt.localeCompare(a.updatedAt)
-    );
-  } catch (error) {
-    if (
-      error &&
-      typeof error === "object" &&
-      "code" in error &&
-      error.code === "ENOENT"
-    ) {
-      return [];
+  async function readForMutation() {
+    try {
+      return parseLearningMemories(await readFile(memoryFile, "utf8"), true);
+    } catch (error) {
+      if (isMissingFileError(error)) return [];
+      throw error;
     }
-
-    throw error;
   }
+
+  async function writeLearningMemories(entries: LearningMemoryEntry[]) {
+    await mkdir(memoryDirectory, { recursive: true });
+    const temporaryFile = path.join(
+      memoryDirectory,
+      `.entries.json.${randomUUID()}.tmp`
+    );
+
+    try {
+      await writeFile(
+        temporaryFile,
+        `${JSON.stringify(entries, null, 2)}\n`,
+        "utf8"
+      );
+      await rename(temporaryFile, memoryFile);
+    } catch (error) {
+      try {
+        await unlink(temporaryFile);
+      } catch {
+        // The temporary file may not have been created or may already be gone.
+      }
+
+      throw error;
+    }
+  }
+
+  function enqueueMutation<T>(mutation: () => Promise<T>) {
+    const result = mutationTail.then(mutation);
+    mutationTail = result.then(
+      () => undefined,
+      () => undefined
+    );
+    return result;
+  }
+
+  async function list() {
+    try {
+      return parseLearningMemories(await readFile(memoryFile, "utf8"));
+    } catch (error) {
+      if (isMissingFileError(error) || error instanceof SyntaxError) return [];
+      if (
+        error instanceof Error &&
+        error.message === "Learning memory store must contain a JSON array."
+      ) {
+        return [];
+      }
+      throw error;
+    }
+  }
+
+  function create(input: LearningMemoryInput) {
+    return enqueueMutation(async () => {
+      const normalized = normalizeInput(input);
+      const entries = await readForMutation();
+      const now = new Date().toISOString();
+      const entry: LearningMemoryEntry = {
+        id: randomUUID(),
+        ...normalized,
+        createdAt: now,
+        updatedAt: now,
+        source: "manual",
+      };
+
+      await writeLearningMemories([entry, ...entries]);
+      return entry;
+    });
+  }
+
+  function update(id: unknown, input: LearningMemoryInput) {
+    return enqueueMutation(async () => {
+      if (typeof id !== "string" || !id) {
+        throw new Error("Learning note id is required.");
+      }
+
+      const normalized = normalizeInput(input);
+      const entries = await readForMutation();
+      let updatedEntry: LearningMemoryEntry | null = null;
+      const nextEntries = entries.map((entry) => {
+        if (entry.id !== id) return entry;
+
+        updatedEntry = {
+          ...entry,
+          ...normalized,
+          updatedAt: new Date().toISOString(),
+        };
+
+        return updatedEntry;
+      });
+
+      if (!updatedEntry) {
+        throw new Error("Learning note not found.");
+      }
+
+      await writeLearningMemories(nextEntries);
+      return updatedEntry;
+    });
+  }
+
+  function remove(id: unknown) {
+    return enqueueMutation(async () => {
+      if (typeof id !== "string" || !id) {
+        throw new Error("Learning note id is required.");
+      }
+
+      const entries = await readForMutation();
+      const nextEntries = entries.filter((entry) => entry.id !== id);
+
+      if (nextEntries.length === entries.length) {
+        throw new Error("Learning note not found.");
+      }
+
+      await writeLearningMemories(nextEntries);
+    });
+  }
+
+  return { list, create, update, remove };
 }
 
-export async function createLearningMemory(input: LearningMemoryInput) {
-  const normalized = normalizeInput(input);
-  const now = new Date().toISOString();
-  const entry: LearningMemoryEntry = {
-    id: crypto.randomUUID(),
-    ...normalized,
-    createdAt: now,
-    updatedAt: now,
-    source: "manual",
-  };
-  const entries = await listLearningMemories();
+const defaultStore = createLearningMemoryStore(MEMORY_DIR);
 
-  await writeLearningMemories([entry, ...entries]);
-
-  return entry;
+export function listLearningMemories() {
+  return defaultStore.list();
 }
 
-export async function updateLearningMemory(id: unknown, input: LearningMemoryInput) {
-  if (typeof id !== "string" || !id) {
-    throw new Error("Learning note id is required.");
-  }
-
-  const normalized = normalizeInput(input);
-  const entries = await listLearningMemories();
-  let updatedEntry: LearningMemoryEntry | null = null;
-  const nextEntries = entries.map((entry) => {
-    if (entry.id !== id) return entry;
-
-    updatedEntry = {
-      ...entry,
-      ...normalized,
-      updatedAt: new Date().toISOString(),
-    };
-
-    return updatedEntry;
-  });
-
-  if (!updatedEntry) {
-    throw new Error("Learning note not found.");
-  }
-
-  await writeLearningMemories(nextEntries);
-
-  return updatedEntry;
+export function createLearningMemory(input: LearningMemoryInput) {
+  return defaultStore.create(input);
 }
 
-export async function deleteLearningMemory(id: unknown) {
-  if (typeof id !== "string" || !id) {
-    throw new Error("Learning note id is required.");
-  }
+export function updateLearningMemory(id: unknown, input: LearningMemoryInput) {
+  return defaultStore.update(id, input);
+}
 
-  const entries = await listLearningMemories();
-  const nextEntries = entries.filter((entry) => entry.id !== id);
-
-  if (nextEntries.length === entries.length) {
-    throw new Error("Learning note not found.");
-  }
-
-  await writeLearningMemories(nextEntries);
+export function deleteLearningMemory(id: unknown) {
+  return defaultStore.remove(id);
 }
 
 export async function getSelectedLearningMemories(ids: unknown) {
