@@ -138,6 +138,7 @@ describe("GET /api/runtime/status", () => {
       enabled: true,
       status: "pass",
       contextAvailable: true,
+      summaryText: "",
     });
   });
 });
