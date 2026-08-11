@@ -12,11 +12,13 @@ import type {
   HaloDocumentRecord,
   HaloDocumentType,
 } from "./types";
+import { MAX_UPLOAD_BYTES } from "./upload-size-policy";
+
+export { MAX_UPLOAD_BYTES } from "./upload-size-policy";
 
 const STORAGE_ROOT = path.join(process.cwd(), ".halo-documents");
 const FILES_DIR = path.join(STORAGE_ROOT, "files");
 const INDEX_DIR = path.join(STORAGE_ROOT, "index");
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const CHUNK_SIZE = 1200;
 const CHUNK_OVERLAP = 160;
 const PDF_EXTRACTION_FAILED_NOTE =
