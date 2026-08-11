@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 
-import { HaloDocumentError, uploadDocument } from "@/lib/halo/documents";
+import {
+  HaloDocumentError,
+  uploadDocument,
+} from "@/lib/halo/documents";
+import { isDocumentUploadOversized } from "@/lib/halo/documents/upload-size-policy";
 
 export const runtime = "nodejs";
 
@@ -32,6 +36,12 @@ export async function POST(req: Request) {
       return uploadErrorResponse(
         "Upload requires a multipart file field named file.",
         400
+      );
+    }
+
+    if (isDocumentUploadOversized(file.size)) {
+      throw new HaloDocumentError(
+        "Document is larger than the 10 MB local upload limit."
       );
     }
 
