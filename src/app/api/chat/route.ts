@@ -1,6 +1,3 @@
-import { lstat, readFile, stat } from "node:fs/promises";
-import path from "node:path";
-
 import { routeHaloModel } from "@/lib/halo/model-router";
 import { evaluateChatRequestLimits } from "@/lib/halo/chat-request-policy";
 import {
@@ -10,12 +7,8 @@ import {
 import { queryDocuments } from "@/lib/halo/documents";
 import { searchWeb, type SearchResponse } from "@/lib/halo/search";
 import { HALO_CONSOLE_SYSTEM_PROMPT } from "@/lib/halo/system-prompts";
-import {
-  findPrivateMarkers,
-  parseRuntimeReportStatus,
-  RUNTIME_REPORT_ENV,
-  RUNTIME_REPORT_MAX_BYTES,
-} from "@/lib/halo/runtime-bridge";
+import { readRuntimeReport } from "@/lib/halo/runtime-bridge-reader";
+import { RUNTIME_REPORT_ENV } from "@/lib/halo/runtime-bridge";
 import { HALO_MODELS } from "@/lib/halo/types";
 import type { HaloChatMessage } from "@/lib/halo/types";
 import { isHaloChatMessage } from "@/lib/halo/validators";
@@ -94,34 +87,15 @@ function buildSelectedLearningContext(context: string) {
 }
 
 async function readRuntimeContext() {
-  const reportPath = process.env[RUNTIME_REPORT_ENV]?.trim();
+  const result = await readRuntimeReport(process.env[RUNTIME_REPORT_ENV]);
 
-  if (!reportPath || !path.isAbsolute(reportPath)) {
-    return null;
-  }
+  if (!result.contextAvailable) return null;
 
-  try {
-    const linkInfo = await lstat(reportPath);
-    if (linkInfo.isSymbolicLink()) return null;
-
-    const fileInfo = await stat(reportPath);
-    if (!fileInfo.isFile() || fileInfo.size > RUNTIME_REPORT_MAX_BYTES) {
-      return null;
-    }
-
-    const summaryText = await readFile(reportPath, "utf8");
-    if (findPrivateMarkers(summaryText).length > 0) return null;
-    const status = parseRuntimeReportStatus(summaryText);
-    if (status === "blocked") return null;
-
-    return {
-      status,
-      lastUpdated: fileInfo.mtime.toISOString(),
-      summaryText,
-    };
-  } catch {
-    return null;
-  }
+  return {
+    status: result.status,
+    lastUpdated: result.lastUpdated,
+    summaryText: result.summaryText,
+  };
 }
 
 function buildRuntimeContext(context: Awaited<ReturnType<typeof readRuntimeContext>>) {
