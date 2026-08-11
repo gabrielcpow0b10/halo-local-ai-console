@@ -93,6 +93,14 @@ When `Use Selected Docs` is enabled with `Use Local Docs`, retrieval is limited 
 
 Scanned or image-only PDFs can be recorded as local document entries, but OCR is not implemented in this preview. HALO Console reports that no extractable text was found rather than guessing from filenames or private metadata.
 
+## Built from scratch
+
+HALO Console extracts text-based PDFs without PDF parsing dependencies: it parses PDF streams, inflates compressed streams with Node built-ins, decodes ToUnicode/CMap mappings when available, and reconstructs text from content-stream operators.
+
+Local retrieval is transparent and inspectable, using weighted lexical chunk scoring rather than embeddings or a vector database. It includes English and Spanish stopword handling plus exercise-, reference-, identifier-, phrase-, and filename-aware matching. Extracted chunks also receive quality scores so garbage or unreliable text can be excluded from model context.
+
+OCR is not implemented. For scanned or image-only PDFs, HALO Console reports missing extractable text rather than guessing.
+
 ## HALO Learning Layer
 
 The HALO Learning Layer is a manual local note system. Users can create, edit, filter, select, preview, and delete learning notes such as project notes, study notes, code patterns, corrected mistakes, and personal preferences.
