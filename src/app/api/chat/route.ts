@@ -2,6 +2,7 @@ import { lstat, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 
 import { routeHaloModel } from "@/lib/halo/model-router";
+import { evaluateChatRequestLimits } from "@/lib/halo/chat-request-policy";
 import {
   formatSelectedLearningContext,
   getSelectedLearningMemories,
@@ -228,6 +229,12 @@ export async function POST(req: Request) {
     const messages = Array.isArray(body.messages)
       ? body.messages.filter(isHaloChatMessage)
       : [];
+    const requestLimitResult = evaluateChatRequestLimits(body.messages, messages);
+
+    if (!requestLimitResult.allowed) {
+      return new Response(requestLimitResult.error, { status: 413 });
+    }
+
     const shouldUseRouter = body.router === true;
     const webSearchEnabled = body.webSearch === true;
     const localDocumentsEnabled = body.localDocuments === true;
