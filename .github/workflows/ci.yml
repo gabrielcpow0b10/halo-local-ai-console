@@ -29,6 +29,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Run dependency audit
+        run: npm audit --audit-level=high
+
       - name: Check env contract
         run: npm run check:env
 
