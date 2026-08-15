@@ -27,6 +27,57 @@ describe("findPrivateMarkers", () => {
   });
 
   it.each([
+    ["password=fixture-value", "password"],
+    ["PASSWORD: fixture-value", "password"],
+    ["token=fixture-value", "token"],
+    ["token: fixture-value", "token"],
+    ["secret=fixture-value", "secret"],
+    ["api_key=fixture-value", "api_key"],
+    ["API_KEY: fixture-value", "api_key"],
+    ["apikey=fixture-value", "apikey"],
+  ])("detects complete credential term in %s", (value, marker) => {
+    expect(findPrivateMarkers(value)).toContain(marker);
+  });
+
+  it.each([
+    ["password", "password"],
+    ["token", "token"],
+    ["secret", "secret"],
+    ["token budget", "token"],
+    ["secret value", "secret"],
+    ["password status", "password"],
+  ])("conservatively detects standalone credential term in %s", (value, marker) => {
+    expect(findPrivateMarkers(value)).toContain(marker);
+  });
+
+  it.each([
+    "passwordless authentication",
+    "passwordless mode enabled",
+    "tokenization complete",
+    "tokenizer ready",
+    "detokenized output",
+    "secretary service",
+    "secretarial workflow",
+    "apikeys documented",
+    "prefixapikeysuffix",
+  ])("does not detect a credential marker embedded in %s", (value) => {
+    expect(findPrivateMarkers(value)).toEqual([]);
+  });
+
+  it.each([
+    ["password_hash=fixture", "password"],
+    ["token_value=fixture", "token"],
+    ["secret_access=fixture", "secret"],
+    ["service_api_key_value=fixture", "api_key"],
+    ["some_api_key_suffix", "api_key"],
+    ["service_apikey_value=fixture", "apikey"],
+    ["access-token=fixture", "token"],
+    ["secret-key=fixture", "secret"],
+  ])("detects a credential term delimited by underscore or hyphen in %s", (value, marker) => {
+    expect(findPrivateMarkers(value)).toContain(marker);
+  });
+
+  it.each([
     ["10.0.0.0", true],
     ["10.255.255.255", true],
     ["9.255.255.255", false],
@@ -161,6 +212,38 @@ describe("readRuntimeReport", () => {
       summaryText: "",
     });
     expect(result.lastUpdated).not.toBeNull();
+  });
+
+  it.each([
+    "passwordless authentication enabled",
+    "tokenization complete",
+  ])("returns a report containing the safe phrase %s", async (safePhrase) => {
+    const reportPath = path.join(temporaryDirectory, "lexically-safe-report.txt");
+    const summaryText = `Runtime status: pass\n${safePhrase}\n`;
+    await writeFile(reportPath, summaryText, "utf8");
+
+    await expect(readRuntimeReport(reportPath)).resolves.toMatchObject({
+      status: "pass",
+      contextAvailable: true,
+      summaryText,
+    });
+  });
+
+  it("blocks a complete credential term and withholds report content", async () => {
+    const reportPath = path.join(temporaryDirectory, "credential-report.txt");
+    await writeFile(
+      reportPath,
+      "Runtime status: pass\ntoken=fixture-value\n",
+      "utf8"
+    );
+
+    await expect(readRuntimeReport(reportPath)).resolves.toMatchObject({
+      status: "blocked",
+      message:
+        "Runtime Bridge report contains private markers and was not returned.",
+      contextAvailable: false,
+      summaryText: "",
+    });
   });
 
   it.each([
