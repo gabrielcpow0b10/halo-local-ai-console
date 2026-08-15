@@ -25,6 +25,67 @@ describe("findPrivateMarkers", () => {
     expect(findPrivateMarkers("api_key=private-value")).toContain("api_key");
     expect(findPrivateMarkers("credential-like files: none")).toEqual([]);
   });
+
+  it.each([
+    ["10.0.0.0", true],
+    ["10.255.255.255", true],
+    ["9.255.255.255", false],
+    ["11.0.0.0", false],
+    ["172.16.0.0", true],
+    ["172.31.255.255", true],
+    ["172.15.255.255", false],
+    ["172.32.0.0", false],
+    ["192.168.0.0", true],
+    ["192.168.255.255", true],
+    ["192.167.255.255", false],
+    ["192.169.0.0", false],
+  ])("classifies RFC1918 boundary %s as detected=%s", (address, detected) => {
+    expect(findPrivateMarkers(address).includes("rfc1918_ipv4")).toBe(
+      detected
+    );
+  });
+
+  it.each([
+    ["100.64.0.0", true],
+    ["100.127.255.255", true],
+    ["100.63.255.255", false],
+    ["100.128.0.0", false],
+  ])("classifies CGNAT boundary %s as detected=%s", (address, detected) => {
+    expect(findPrivateMarkers(address).includes("cgnat_ipv4")).toBe(detected);
+  });
+
+  it.each([
+    "8.8.8.8",
+    "10.999.0.1",
+    "100.64.0.999",
+    "100.",
+    "10.0.",
+  ])("does not classify invalid or public IPv4 input %s", (value) => {
+    expect(findPrivateMarkers(value)).toEqual([]);
+  });
+
+  it("detects private IPv4 addresses followed by ports and CIDR notation", () => {
+    expect(findPrivateMarkers("endpoint 10.42.5.6:8080")).toContain(
+      "rfc1918_ipv4"
+    );
+    expect(findPrivateMarkers("routes 172.20.0.0/16 and 100.96.0.0/11")).toEqual([
+      "rfc1918_ipv4",
+      "cgnat_ipv4",
+    ]);
+  });
+
+  it("returns each private IPv4 category at most once", () => {
+    expect(findPrivateMarkers("10.1.2.3 172.20.1.2 192.168.3.4")).toEqual([
+      "rfc1918_ipv4",
+    ]);
+    expect(findPrivateMarkers("100.64.1.2 100.127.3.4")).toEqual([
+      "cgnat_ipv4",
+    ]);
+    expect(findPrivateMarkers("10.2.3.4 100.100.2.3")).toEqual([
+      "rfc1918_ipv4",
+      "cgnat_ipv4",
+    ]);
+  });
 });
 
 describe("readRuntimeReport", () => {
@@ -100,6 +161,39 @@ describe("readRuntimeReport", () => {
       summaryText: "",
     });
     expect(result.lastUpdated).not.toBeNull();
+  });
+
+  it.each([
+    ["CGNAT", "100.96.2.3"],
+    ["RFC1918 outside the old prefix", "10.42.2.3"],
+  ])("blocks a report containing %s IPv4", async (_category, address) => {
+    const reportPath = path.join(temporaryDirectory, "private-ip-report.txt");
+    await writeFile(
+      reportPath,
+      `Runtime status: pass\nSynthetic endpoint: ${address}\n`,
+      "utf8"
+    );
+
+    await expect(readRuntimeReport(reportPath)).resolves.toMatchObject({
+      status: "blocked",
+      message:
+        "Runtime Bridge report contains private markers and was not returned.",
+      contextAvailable: false,
+      summaryText: "",
+    });
+  });
+
+  it("allows a public 100.x address outside CGNAT", async () => {
+    const reportPath = path.join(temporaryDirectory, "public-100-report.txt");
+    const summaryText =
+      "Runtime status: pass\nSynthetic public endpoint: 100.128.0.1\n";
+    await writeFile(reportPath, summaryText, "utf8");
+
+    await expect(readRuntimeReport(reportPath)).resolves.toMatchObject({
+      status: "pass",
+      contextAvailable: true,
+      summaryText,
+    });
   });
 
   it("returns summary text for a safe pass report", async () => {
