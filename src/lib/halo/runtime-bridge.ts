@@ -21,12 +21,15 @@ const PRIVATE_MARKERS = [
   "gabriel_cpow0b10",
   "localhost",
   "0.0.0.0",
-  "password",
-  "token",
-  "secret",
-  "api_key",
-  "apikey",
   "BEGIN PRIVATE KEY",
+];
+
+const CREDENTIAL_MARKERS = [
+  { label: "password", pattern: /(^|[^a-z0-9])password(?![a-z0-9])/i },
+  { label: "token", pattern: /(^|[^a-z0-9])token(?![a-z0-9])/i },
+  { label: "secret", pattern: /(^|[^a-z0-9])secret(?![a-z0-9])/i },
+  { label: "api_key", pattern: /(^|[^a-z0-9])api_key(?![a-z0-9])/i },
+  { label: "apikey", pattern: /(^|[^a-z0-9])apikey(?![a-z0-9])/i },
 ];
 
 const IPV4_CANDIDATE_PATTERN = /(^|[^\d.])(\d+(?:\.\d+){3})(?![\d.])/g;
@@ -63,6 +66,9 @@ export function findPrivateMarkers(value: string) {
   return [
     ...PRIVATE_MARKERS.filter((marker) =>
       normalized.includes(marker.toLowerCase())
+    ),
+    ...CREDENTIAL_MARKERS.filter(({ pattern }) => pattern.test(value)).map(
+      ({ label }) => label
     ),
     ...findPrivateIpv4Markers(value),
   ];
