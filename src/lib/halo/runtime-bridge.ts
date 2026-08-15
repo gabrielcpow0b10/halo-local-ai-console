@@ -16,10 +16,6 @@ const PRIVATE_MARKERS = [
   "/Users/",
   "~/.ssh",
   ".ssh",
-  "192.168.",
-  "10.0.",
-  "172.16.",
-  "100.",
   "homelab-pi",
   "rack-display",
   "gabriel_cpow0b10",
@@ -33,12 +29,43 @@ const PRIVATE_MARKERS = [
   "BEGIN PRIVATE KEY",
 ];
 
+const IPV4_CANDIDATE_PATTERN = /(^|[^\d.])(\d+(?:\.\d+){3})(?![\d.])/g;
+
+function findPrivateIpv4Markers(value: string) {
+  const markers = new Set<string>();
+
+  for (const match of value.matchAll(IPV4_CANDIDATE_PATTERN)) {
+    const decimalOctets = match[2].split(".");
+
+    if (decimalOctets.some((octet) => octet.length > 3)) continue;
+
+    const octets = decimalOctets.map(Number);
+
+    if (octets.some((octet) => octet > 255)) continue;
+
+    const [first, second] = octets;
+    const isRfc1918 =
+      first === 10 ||
+      (first === 172 && second >= 16 && second <= 31) ||
+      (first === 192 && second === 168);
+    const isCgnat = first === 100 && second >= 64 && second <= 127;
+
+    if (isRfc1918) markers.add("rfc1918_ipv4");
+    if (isCgnat) markers.add("cgnat_ipv4");
+  }
+
+  return [...markers];
+}
+
 export function findPrivateMarkers(value: string) {
   const normalized = value.toLowerCase();
 
-  return PRIVATE_MARKERS.filter((marker) =>
-    normalized.includes(marker.toLowerCase())
-  );
+  return [
+    ...PRIVATE_MARKERS.filter((marker) =>
+      normalized.includes(marker.toLowerCase())
+    ),
+    ...findPrivateIpv4Markers(value),
+  ];
 }
 
 export function hasPrivateMarkers(value: string) {
