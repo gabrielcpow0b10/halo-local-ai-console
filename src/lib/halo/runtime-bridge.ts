@@ -11,18 +11,35 @@ export type RuntimeBridgeResponse = {
 
 export const RUNTIME_REPORT_MAX_BYTES = 64 * 1024;
 export const RUNTIME_REPORT_ENV = "HALO_RUNTIME_PUBLIC_SAFE_REPORT";
+export const RUNTIME_PRIVATE_MARKERS_ENV = "HALO_RUNTIME_PRIVATE_MARKERS";
 
 const PRIVATE_MARKERS = [
   "/Users/",
   "~/.ssh",
   ".ssh",
-  "homelab-pi",
-  "rack-display",
-  "gabriel_cpow0b10",
   "localhost",
   "0.0.0.0",
   "BEGIN PRIVATE KEY",
 ];
+
+export function parseRuntimePrivateMarkers(
+  value?: string | null
+): string[] {
+  const markers: string[] = [];
+  const seen = new Set<string>();
+
+  for (const entry of value?.split(",") ?? []) {
+    const marker = entry.trim();
+    const normalizedMarker = marker.toLowerCase();
+
+    if (!marker || seen.has(normalizedMarker)) continue;
+
+    seen.add(normalizedMarker);
+    markers.push(marker);
+  }
+
+  return markers;
+}
 
 const CREDENTIAL_MARKERS = [
   { label: "password", pattern: /(^|[^a-z0-9])password(?![a-z0-9])/i },
@@ -60,8 +77,18 @@ function findPrivateIpv4Markers(value: string) {
   return [...markers];
 }
 
-export function findPrivateMarkers(value: string) {
+export function findPrivateMarkers(
+  value: string,
+  deploymentPrivateMarkers: readonly string[] = []
+) {
   const normalized = value.toLowerCase();
+  const containsDeploymentPrivateMarker = deploymentPrivateMarkers.some(
+    (marker) => {
+      const normalizedMarker = marker.trim().toLowerCase();
+
+      return normalizedMarker.length > 0 && normalized.includes(normalizedMarker);
+    }
+  );
 
   return [
     ...PRIVATE_MARKERS.filter((marker) =>
@@ -71,11 +98,15 @@ export function findPrivateMarkers(value: string) {
       ({ label }) => label
     ),
     ...findPrivateIpv4Markers(value),
+    ...(containsDeploymentPrivateMarker ? ["deployment_private_marker"] : []),
   ];
 }
 
-export function hasPrivateMarkers(value: string) {
-  return findPrivateMarkers(value).length > 0;
+export function hasPrivateMarkers(
+  value: string,
+  deploymentPrivateMarkers?: readonly string[]
+) {
+  return findPrivateMarkers(value, deploymentPrivateMarkers).length > 0;
 }
 
 export function parseRuntimeReportStatus(value: string): RuntimeBridgeStatus {

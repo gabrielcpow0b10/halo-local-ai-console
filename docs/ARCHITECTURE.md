@@ -132,6 +132,7 @@ The bridge is deliberately narrow:
 - It does not list directories or read arbitrary files.
 - It does not execute shell commands or SSH.
 - It rejects symbolic links, non-file paths, oversized reports, and reports containing private markers.
+- Operator-configured private deployment markers can augment the generic privacy filter.
 
 The report is generated outside HALO Console. Runtime Bridge adds no monitoring, command execution, or administrative capability.
 
