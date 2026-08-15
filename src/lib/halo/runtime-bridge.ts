@@ -42,12 +42,41 @@ export function parseRuntimePrivateMarkers(
 }
 
 const CREDENTIAL_MARKERS = [
-  { label: "password", pattern: /(^|[^a-z0-9])password(?![a-z0-9])/i },
-  { label: "token", pattern: /(^|[^a-z0-9])token(?![a-z0-9])/i },
-  { label: "secret", pattern: /(^|[^a-z0-9])secret(?![a-z0-9])/i },
-  { label: "api_key", pattern: /(^|[^a-z0-9])api_key(?![a-z0-9])/i },
-  { label: "apikey", pattern: /(^|[^a-z0-9])apikey(?![a-z0-9])/i },
+  {
+    label: "password",
+    patterns: [
+      /(^|[^a-z0-9])password\s*[:=]/i,
+      /(^|[^a-z0-9])password[_-](?:hash|value|secret)(?![a-z0-9])/i,
+    ],
+  },
+  {
+    label: "token",
+    patterns: [
+      /(^|[^a-z0-9])token\s*[:=]/i,
+      /(^|[^a-z0-9])token[_-](?:value|secret|key)(?![a-z0-9])/i,
+      /(^|[^a-z0-9])(?:access|auth|refresh|session)[_-]token(?![a-z0-9])/i,
+    ],
+  },
+  {
+    label: "secret",
+    patterns: [
+      /(^|[^a-z0-9])secret\s*[:=]/i,
+      /(^|[^a-z0-9])secret[_-](?:access|value|key)(?![a-z0-9])/i,
+      /(^|[^a-z0-9])(?:client|api|access)[_-]secret(?![a-z0-9])/i,
+    ],
+  },
+  {
+    label: "api_key",
+    patterns: [/(^|[^a-z0-9])api_key(?![a-z0-9])/i],
+  },
+  { label: "apikey", patterns: [/(^|[^a-z0-9])apikey(?![a-z0-9])/i] },
 ];
+
+function findCredentialMarkers(value: string): string[] {
+  return CREDENTIAL_MARKERS.filter(({ patterns }) =>
+    patterns.some((pattern) => pattern.test(value))
+  ).map(({ label }) => label);
+}
 
 const IPV4_CANDIDATE_PATTERN = /(^|[^\d.])(\d+(?:\.\d+){3})(?![\d.])/g;
 
@@ -94,9 +123,7 @@ export function findPrivateMarkers(
     ...PRIVATE_MARKERS.filter((marker) =>
       normalized.includes(marker.toLowerCase())
     ),
-    ...CREDENTIAL_MARKERS.filter(({ pattern }) => pattern.test(value)).map(
-      ({ label }) => label
-    ),
+    ...findCredentialMarkers(value),
     ...findPrivateIpv4Markers(value),
     ...(containsDeploymentPrivateMarker ? ["deployment_private_marker"] : []),
   ];
