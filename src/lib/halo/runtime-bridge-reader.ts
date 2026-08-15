@@ -4,7 +4,9 @@ import path from "node:path";
 import {
   findPrivateMarkers,
   normalizeRuntimeBridgeResponse,
+  parseRuntimePrivateMarkers,
   parseRuntimeReportStatus,
+  RUNTIME_PRIVATE_MARKERS_ENV,
   RUNTIME_REPORT_MAX_BYTES,
   type RuntimeBridgeResponse,
 } from "./runtime-bridge";
@@ -64,8 +66,11 @@ export async function readRuntimeReport(
     }
 
     const summaryText = await readFile(normalizedReportPath, "utf8");
+    const deploymentPrivateMarkers = parseRuntimePrivateMarkers(
+      process.env[RUNTIME_PRIVATE_MARKERS_ENV]
+    );
 
-    if (findPrivateMarkers(summaryText).length > 0) {
+    if (findPrivateMarkers(summaryText, deploymentPrivateMarkers).length > 0) {
       return normalizeRuntimeBridgeResponse({
         enabled: true,
         status: "blocked",

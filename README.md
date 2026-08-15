@@ -119,6 +119,10 @@ Configure it with a placeholder-style absolute file path in local environment on
 HALO_RUNTIME_PUBLIC_SAFE_REPORT=/absolute/path/to/public-safe-demo-summary.local.md
 ```
 
+`HALO_RUNTIME_PRIVATE_MARKERS` is optional and accepts comma-separated local
+deployment identifiers. Keep real values only in local untracked configuration;
+detected values are never returned to callers.
+
 Safety boundaries:
 
 - Reads only the single file path configured by `HALO_RUNTIME_PUBLIC_SAFE_REPORT`.

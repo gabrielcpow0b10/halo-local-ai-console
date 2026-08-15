@@ -6,21 +6,117 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import {
   findPrivateMarkers,
+  parseRuntimePrivateMarkers,
+  RUNTIME_PRIVATE_MARKERS_ENV,
   RUNTIME_REPORT_MAX_BYTES,
 } from "./runtime-bridge";
 import { readRuntimeReport } from "./runtime-bridge-reader";
 
 let temporaryDirectory: string;
+const originalRuntimePrivateMarkers = process.env[RUNTIME_PRIVATE_MARKERS_ENV];
 
 beforeEach(async () => {
+  delete process.env[RUNTIME_PRIVATE_MARKERS_ENV];
   temporaryDirectory = await mkdtemp(path.join(tmpdir(), "halo-runtime-reader-"));
 });
 
 afterEach(async () => {
   await rm(temporaryDirectory, { recursive: true, force: true });
+
+  if (originalRuntimePrivateMarkers === undefined) {
+    delete process.env[RUNTIME_PRIVATE_MARKERS_ENV];
+  } else {
+    process.env[RUNTIME_PRIVATE_MARKERS_ENV] = originalRuntimePrivateMarkers;
+  }
+});
+
+describe("parseRuntimePrivateMarkers", () => {
+  it("returns no markers for undefined or null", () => {
+    expect(parseRuntimePrivateMarkers(undefined)).toEqual([]);
+    expect(parseRuntimePrivateMarkers(null)).toEqual([]);
+  });
+
+  it("returns no markers for an empty string", () => {
+    expect(parseRuntimePrivateMarkers("")).toEqual([]);
+  });
+
+  it("parses comma-separated synthetic markers", () => {
+    expect(parseRuntimePrivateMarkers("private-host-a,private-user-a")).toEqual([
+      "private-host-a",
+      "private-user-a",
+    ]);
+  });
+
+  it("trims surrounding whitespace", () => {
+    expect(
+      parseRuntimePrivateMarkers(" private-host-a , private-user-a ")
+    ).toEqual(["private-host-a", "private-user-a"]);
+  });
+
+  it("removes empty entries", () => {
+    expect(parseRuntimePrivateMarkers(",private-host-a,, ,")).toEqual([
+      "private-host-a",
+    ]);
+  });
+
+  it("deduplicates markers case-insensitively", () => {
+    expect(
+      parseRuntimePrivateMarkers("private-host-a,PRIVATE-HOST-A")
+    ).toEqual(["private-host-a"]);
+  });
+
+  it("preserves deterministic first-occurrence ordering", () => {
+    expect(
+      parseRuntimePrivateMarkers(
+        "private-user-a,PRIVATE-HOST-A,private-host-a,PRIVATE-USER-A"
+      )
+    ).toEqual(["private-user-a", "PRIVATE-HOST-A"]);
+  });
 });
 
 describe("findPrivateMarkers", () => {
+  it("detects a configured synthetic hostname without returning its value", () => {
+    const markers = findPrivateMarkers("Node private-host-a is healthy", [
+      "private-host-a",
+    ]);
+
+    expect(markers).toContain("deployment_private_marker");
+    expect(markers).not.toContain("private-host-a");
+  });
+
+  it("matches configured deployment markers case-insensitively", () => {
+    expect(
+      findPrivateMarkers("Node PRIVATE-HOST-A is healthy", ["private-host-a"])
+    ).toContain("deployment_private_marker");
+  });
+
+  it("detects a configured synthetic username-style marker", () => {
+    expect(
+      findPrivateMarkers("Owner: private-user-a", ["private-user-a"])
+    ).toContain("deployment_private_marker");
+  });
+
+  it("returns the generic deployment label only once for multiple matches", () => {
+    const markers = findPrivateMarkers(
+      "private-host-a is assigned to private-user-a",
+      ["private-host-a", "private-user-a", "PRIVATE-HOST-A"]
+    );
+
+    expect(markers.filter((marker) => marker === "deployment_private_marker")).toHaveLength(1);
+    expect(markers).not.toContain("private-host-a");
+    expect(markers).not.toContain("private-user-a");
+  });
+
+  it("does not detect an unconfigured synthetic hostname", () => {
+    expect(findPrivateMarkers("Node private-host-a is healthy")).toEqual([]);
+  });
+
+  it("continues to detect a generic literal privacy marker", () => {
+    expect(findPrivateMarkers("Connect through localhost")).toContain(
+      "localhost"
+    );
+  });
+
   it("detects private markers without flagging the safe credential phrase", () => {
     expect(findPrivateMarkers("api_key=private-value")).toContain("api_key");
     expect(findPrivateMarkers("credential-like files: none")).toEqual([]);
@@ -140,6 +236,47 @@ describe("findPrivateMarkers", () => {
 });
 
 describe("readRuntimeReport", () => {
+  it("blocks a configured deployment marker without exposing configured values", async () => {
+    process.env[RUNTIME_PRIVATE_MARKERS_ENV] =
+      "private-host-a,private-user-a";
+    const reportPath = path.join(temporaryDirectory, "deployment-report.txt");
+    await writeFile(reportPath, "Node private-host-a is healthy", "utf8");
+
+    const result = await readRuntimeReport(reportPath);
+
+    expect(result).toMatchObject({
+      status: "blocked",
+      contextAvailable: false,
+      summaryText: "",
+    });
+    expect(JSON.stringify(result)).not.toContain("private-host-a");
+    expect(JSON.stringify(result)).not.toContain("private-user-a");
+  });
+
+  it("does not block an unconfigured synthetic hostname", async () => {
+    const reportPath = path.join(temporaryDirectory, "unconfigured-report.txt");
+    const summaryText = "Node private-host-a is healthy";
+    await writeFile(reportPath, summaryText, "utf8");
+
+    await expect(readRuntimeReport(reportPath)).resolves.toMatchObject({
+      status: "pass",
+      contextAvailable: true,
+      summaryText,
+    });
+  });
+
+  it("blocks configured deployment markers case-insensitively", async () => {
+    process.env[RUNTIME_PRIVATE_MARKERS_ENV] = "private-host-a";
+    const reportPath = path.join(temporaryDirectory, "case-report.txt");
+    await writeFile(reportPath, "Node PRIVATE-HOST-A is healthy", "utf8");
+
+    await expect(readRuntimeReport(reportPath)).resolves.toMatchObject({
+      status: "blocked",
+      contextAvailable: false,
+      summaryText: "",
+    });
+  });
+
   it("returns disabled when the path is missing", async () => {
     await expect(readRuntimeReport()).resolves.toMatchObject({
       enabled: false,
