@@ -1593,15 +1593,21 @@ textarea:focus {
   }
 
   .composer {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 10px;
   }
 
   .composer-tools {
-    justify-content: stretch;
+    justify-content: flex-start;
+    gap: 6px;
   }
 
   .search-toggle {
-    width: 100%;
+    flex: 0 1 auto;
+    width: auto;
+    min-height: 36px;
   }
 
   .search-toggle span {
@@ -1612,7 +1618,14 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .composer textarea {
+    min-height: 76px;
+    padding: 12px 14px;
+  }
+
   .composer button {
-    width: 100%;
+    width: auto;
+    min-width: 80px;
+    min-height: 48px;
   }
 }
