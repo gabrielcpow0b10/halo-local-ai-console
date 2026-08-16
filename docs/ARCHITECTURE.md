@@ -136,6 +136,10 @@ The bridge is deliberately narrow:
 
 The report is generated outside HALO Console. Runtime Bridge adds no monitoring, command execution, or administrative capability.
 
+### Policy Domain Separation
+
+Web Search intent and Runtime Bridge privacy are independent security domains. Search intent classifies whether current or external information would be useful; Runtime Bridge privacy classifies whether local runtime report content is safe to inject. Search intent never relaxes Runtime Bridge privacy checks, and privacy findings never activate Web Search. `/api/chat` enables Web Search only from the explicit `webSearch` request flag, while `useRuntimeContext` independently enables runtime context, which is injected only after `readRuntimeReport()` approves the report. The two production policy modules intentionally have no dependency on each other.
+
 ## Security Model
 
 HALO Console's security posture is local-first and explicit:
