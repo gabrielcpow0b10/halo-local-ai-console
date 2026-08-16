@@ -700,6 +700,7 @@ export default function Home() {
   const [isUpdatingMemory, setIsUpdatingMemory] = useState(false);
   const [hasLoadedLocalData, setHasLoadedLocalData] = useState(false);
   const [mounted, setMounted] = useState(false);
+  const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -849,6 +850,19 @@ export default function Home() {
 
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [sessions, activeId, hasLoadedLocalData]);
+
+  useEffect(() => {
+    if (!mobileControlsOpen) return;
+
+    function closeMobileControls(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setMobileControlsOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", closeMobileControls);
+    return () => window.removeEventListener("keydown", closeMobileControls);
+  }, [mobileControlsOpen]);
 
   async function refreshStatus() {
     setHealth("checking");
@@ -1577,7 +1591,11 @@ export default function Home() {
 
   return (
     <main className="halo-shell">
-      <aside className="sidebar" aria-label="HALO Console controls">
+      <aside
+        id="halo-controls"
+        className={`sidebar ${mobileControlsOpen ? "mobile-open" : ""}`}
+        aria-label="HALO Console controls"
+      >
         <div className="brand">
           <h1>HALO</h1>
           <p className="subtitle">Your local AI workspace.</p>
@@ -2247,6 +2265,15 @@ export default function Home() {
         </details>
       </aside>
 
+      <button
+        type="button"
+        className={`mobile-sidebar-backdrop ${
+          mobileControlsOpen ? "visible" : ""
+        }`}
+        aria-label="Close controls"
+        onClick={() => setMobileControlsOpen(false)}
+      />
+
       <section className="chat-panel" aria-label="Chat session">
         <header className="chat-header">
           <div>
@@ -2260,6 +2287,15 @@ export default function Home() {
             </div>
           </div>
           <div className="header-actions">
+            <button
+              type="button"
+              className="mobile-controls-button"
+              aria-controls="halo-controls"
+              aria-expanded={mobileControlsOpen}
+              onClick={() => setMobileControlsOpen(true)}
+            >
+              Controls
+            </button>
             <span className={isLoading ? "status-pill active" : "status-pill"}>
               {isLoading ? "HALO is thinking" : "Ready"}
             </span>
