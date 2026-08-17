@@ -565,7 +565,7 @@ function renderLocalDocumentSources(localDocs: NonNullable<ChatMessage["localDoc
         }
       >
         {localDocs.usedChunks > 0
-          ? `LOCAL DOCS USED: ${localDocs.usedChunks} CHUNKS${selectedHint}`
+          ? `LOCAL DOCS USED: ${localDocs.usedChunks} ${localDocs.usedChunks === 1 ? "CHUNK" : "CHUNKS"}${selectedHint}`
           : searchedLabel}
         {sourceHint}
       </div>
