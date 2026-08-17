@@ -19,7 +19,6 @@ Current public preview scope:
 
 ## Near-Term Local Improvements
 
-- Add focused tests for model routing, chat request validation, selected document scope, and selected learning context selection.
 - Improve missing-model and unreachable-Ollama error states in the UI.
 - Add clearer document extraction status messages for partial and low-quality documents.
 - Add import/export controls for sanitized learning notes.
