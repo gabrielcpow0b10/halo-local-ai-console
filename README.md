@@ -1,5 +1,7 @@
 # HALO Console
 
+[![CI](https://github.com/gabrielcpow0b10/halo-local-ai-console/actions/workflows/ci.yml/badge.svg)](https://github.com/gabrielcpow0b10/halo-local-ai-console/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 HALO Console is a local-first AI workbench for chatting with Ollama models from a polished browser interface. It is built with Next.js, TypeScript, and a small HALO API layer that keeps model calls, uploaded documents, and manually curated learning notes under local user control.
 
 > Part of the **HALO AgentOps system** — see [SYSTEM.md](SYSTEM.md).
