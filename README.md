@@ -14,6 +14,47 @@ This repository is published as a sanitized `v0.8 Public Preview`. It is intende
 
 This screenshot uses synthetic public-demo data only. It demonstrates local chat, local document context, selected learning context, and read-only Runtime Bridge integration; no private runtime data is shown.
 
+## Requirements
+
+- Node.js and npm.
+- Ollama installed and running.
+- At least one local Ollama model installed.
+
+## Run Locally
+
+Install dependencies if needed:
+
+```bash
+npm install
+```
+
+Start Ollama:
+
+```bash
+ollama serve
+```
+
+Start HALO Console:
+
+```bash
+npm run dev -- -p 3030
+```
+
+Open:
+
+```text
+http://localhost:3030
+```
+
+Useful local checks:
+
+```bash
+curl http://localhost:3030/api/health
+curl http://localhost:3030/api/models
+curl http://localhost:3030/api/documents/list
+curl http://localhost:3030/api/memory/list
+```
+
 ## v0.8 Public Preview
 
 The v0.8 public preview focuses on a complete local chat workflow:
@@ -151,47 +192,6 @@ Runtime answers are worded to be concise and naturally spoken when the user asks
 Web Search remains disabled and unconfigured by default in this public preview. The repository includes a local route/provider foundation for future use, but no cloud search provider, hosted search service, public API key, or default web search integration is enabled.
 
 If no server-side provider is configured, Web Search requests return a clear not-configured response.
-
-## Requirements
-
-- Node.js and npm.
-- Ollama installed and running.
-- At least one local Ollama model installed.
-
-## Run Locally
-
-Install dependencies if needed:
-
-```bash
-npm install
-```
-
-Start Ollama:
-
-```bash
-ollama serve
-```
-
-Start HALO Console:
-
-```bash
-npm run dev -- -p 3030
-```
-
-Open:
-
-```text
-http://localhost:3030
-```
-
-Useful local checks:
-
-```bash
-curl http://localhost:3030/api/health
-curl http://localhost:3030/api/models
-curl http://localhost:3030/api/documents/list
-curl http://localhost:3030/api/memory/list
-```
 
 ## Security Boundaries
 
