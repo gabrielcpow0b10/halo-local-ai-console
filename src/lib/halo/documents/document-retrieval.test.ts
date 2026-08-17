@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -32,6 +32,7 @@ const LOW_QUALITY_TEXT =
 let documents: DocumentsModule;
 let temporaryCwd: string;
 let indexDirectory: string;
+let filesDirectory: string;
 const repositoryCwd = process.cwd();
 
 function makeChunk(
@@ -105,6 +106,7 @@ beforeAll(async () => {
   }
 
   indexDirectory = path.join(documents.getDocumentsStorageRoot(), "index");
+  filesDirectory = path.join(documents.getDocumentsStorageRoot(), "files");
 });
 
 beforeEach(async () => {
@@ -258,6 +260,109 @@ describe("uploadDocument chunking", () => {
     expect(result.document.readableChunkCount).toBe(0);
     expect(result.document.extractionStatus).toBe("low_quality");
   });
+});
+
+describe("document storage path safety", () => {
+  it("rejects a traversal-like delete id", async () => {
+    await expect(documents.deleteDocument("../00000000-0000-0000-0000-000000000001"))
+      .rejects.toThrow("Invalid document id.");
+  });
+
+  it.each([
+    "00000000/0000-0000-0000-000000000001",
+    "00000000\\0000-0000-0000-000000000001",
+  ])("rejects path separators in a delete id: %s", async (id) => {
+    await expect(documents.deleteDocument(id)).rejects.toThrow("Invalid document id.");
+  });
+
+  it("rejects a malformed delete id", async () => {
+    await expect(documents.deleteDocument("not-a-document-id")).rejects.toThrow(
+      "Invalid document id."
+    );
+  });
+
+  it("rejects an unsupported stored document type before filesystem reuse", async () => {
+    const record = await storeRecord({
+      id: IDS.first,
+      filename: "tampered.txt",
+      chunks: [READABLE_PROSE],
+    });
+    await writeFile(
+      path.join(indexDirectory, `${IDS.first}.json`),
+      JSON.stringify({
+        ...record,
+        document: { ...record.document, type: "../../outside" },
+      })
+    );
+
+    await expect(documents.listDocuments()).rejects.toThrow("Invalid document type.");
+    await expect(documents.deleteDocument(IDS.first)).rejects.toThrow(
+      "Invalid document type."
+    );
+  });
+
+  it("does not let a tampered stored document id redirect file access", async () => {
+    const record = await storeRecord({
+      id: IDS.first,
+      filename: "tampered-id.txt",
+      chunks: [READABLE_PROSE],
+    });
+    await mkdir(filesDirectory, { recursive: true });
+    const requestedFile = path.join(filesDirectory, `${IDS.first}.txt`);
+    const redirectedFile = path.join(filesDirectory, `${IDS.second}.txt`);
+    await writeFile(requestedFile, READABLE_PROSE);
+    await writeFile(redirectedFile, "must remain");
+    await writeFile(
+      path.join(indexDirectory, `${IDS.first}.json`),
+      JSON.stringify({
+        ...record,
+        document: { ...record.document, id: IDS.second },
+      })
+    );
+
+    await expect(documents.deleteDocument(IDS.first)).rejects.toThrow(
+      "Stored document id does not match requested id."
+    );
+    await expect(access(requestedFile)).resolves.toBeUndefined();
+    await expect(access(redirectedFile)).resolves.toBeUndefined();
+  });
+
+  it("deletes a valid document and its stored record", async () => {
+    const uploaded = await documents.uploadDocument({
+      filename: "valid-delete.txt",
+      bytes: Buffer.from(READABLE_PROSE),
+    });
+
+    await expect(documents.deleteDocument(uploaded.document.id)).resolves.toMatchObject({
+      id: uploaded.document.id,
+      type: "txt",
+    });
+    await expect(
+      access(path.join(indexDirectory, `${uploaded.document.id}.json`))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(
+      access(path.join(filesDirectory, `${uploaded.document.id}.txt`))
+    ).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it.each(["txt", "md", "log", "pdf"] as const)(
+    "preserves valid .%s upload, list, and delete behavior",
+    async (type) => {
+      const uploaded = await documents.uploadDocument({
+        filename: `supported.${type}`,
+        bytes: Buffer.from(type === "pdf" ? "%PDF-1.4\n%%EOF" : READABLE_PROSE),
+      });
+
+      expect(uploaded.document.type).toBe(type);
+      await expect(documents.listDocuments()).resolves.toEqual([
+        expect.objectContaining({ id: uploaded.document.id, type }),
+      ]);
+      await expect(documents.deleteDocument(uploaded.document.id)).resolves.toMatchObject({
+        id: uploaded.document.id,
+        type,
+      });
+    }
+  );
 });
 
 describe("queryDocuments retrieval", () => {
