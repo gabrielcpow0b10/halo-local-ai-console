@@ -16,9 +16,9 @@ import { MAX_UPLOAD_BYTES } from "./upload-size-policy";
 
 export { MAX_UPLOAD_BYTES } from "./upload-size-policy";
 
-const STORAGE_ROOT = path.join(process.cwd(), ".halo-documents");
-const FILES_DIR = path.join(STORAGE_ROOT, "files");
-const INDEX_DIR = path.join(STORAGE_ROOT, "index");
+const STORAGE_ROOT = path.resolve(process.cwd(), ".halo-documents");
+const FILES_DIR = path.resolve(STORAGE_ROOT, "files");
+const INDEX_DIR = path.resolve(STORAGE_ROOT, "index");
 const CHUNK_SIZE = 1200;
 const CHUNK_OVERLAP = 160;
 const PDF_EXTRACTION_FAILED_NOTE =
@@ -29,7 +29,6 @@ export const LOW_QUALITY_EXTRACTED_TEXT_NOTE =
   "This document was uploaded, but the extracted text quality is too low for reliable local context. OCR is not implemented yet.";
 export const PARTIAL_EXTRACTED_TEXT_NOTE =
   "This document was uploaded with partial readable text.";
-const ALLOWED_TYPES = new Set<HaloDocumentType>(["txt", "md", "log", "pdf"]);
 const STOPWORDS = new Set([
   "a",
   "about",
@@ -98,20 +97,79 @@ export class HaloDocumentError extends Error {
   }
 }
 
-function documentPath(id: string, type: HaloDocumentType) {
-  return path.join(FILES_DIR, `${id}.${type}`);
-}
-
-function recordPath(id: string) {
-  return path.join(INDEX_DIR, `${id}.json`);
-}
-
 function assertSafeId(id: unknown): string {
   if (typeof id !== "string" || !/^[a-f0-9-]{36}$/.test(id)) {
     throw new HaloDocumentError("Invalid document id.");
   }
 
   return id;
+}
+
+function isHaloDocumentType(type: unknown): type is HaloDocumentType {
+  return type === "txt" || type === "md" || type === "log" || type === "pdf";
+}
+
+function assertHaloDocumentType(type: unknown): HaloDocumentType {
+  if (!isHaloDocumentType(type)) {
+    throw new HaloDocumentError("Invalid document type.");
+  }
+
+  return type;
+}
+
+function directChildPath(directory: string, filename: string) {
+  const resolvedDirectory = path.resolve(directory);
+  const candidate = path.resolve(resolvedDirectory, filename);
+  const relative = path.relative(resolvedDirectory, candidate);
+
+  if (
+    !relative ||
+    relative === "." ||
+    path.isAbsolute(relative) ||
+    relative.startsWith(`..${path.sep}`) ||
+    relative === ".." ||
+    relative.includes(path.sep) ||
+    path.dirname(candidate) !== resolvedDirectory
+  ) {
+    throw new HaloDocumentError("Invalid document storage path.");
+  }
+
+  return candidate;
+}
+
+function documentPath(idInput: unknown, typeInput: unknown) {
+  const id = assertSafeId(idInput);
+  const type = assertHaloDocumentType(typeInput);
+  return directChildPath(FILES_DIR, `${id}.${type}`);
+}
+
+function recordPath(idInput: unknown) {
+  const id = assertSafeId(idInput);
+  return directChildPath(INDEX_DIR, `${id}.json`);
+}
+
+function validateStoredRecord(value: unknown) {
+  if (!value || typeof value !== "object") {
+    throw new HaloDocumentError("Invalid stored document record.");
+  }
+
+  const stored = value as { document?: unknown; chunks?: unknown };
+  if (
+    !stored.document ||
+    typeof stored.document !== "object" ||
+    !Array.isArray(stored.chunks)
+  ) {
+    throw new HaloDocumentError("Invalid stored document record.");
+  }
+
+  const document = stored.document as Record<string, unknown>;
+  const id = assertSafeId(document.id);
+  const type = assertHaloDocumentType(document.type);
+
+  return {
+    document: { ...document, id, type } as HaloDocumentRecord,
+    chunks: stored.chunks as HaloDocumentChunk[],
+  };
 }
 
 function cleanFilename(filename: string) {
@@ -129,8 +187,8 @@ function documentTitleFromFilename(filename: string) {
 function getDocumentType(filename: string): HaloDocumentType | null {
   const extension = path.extname(filename).toLowerCase().replace(".", "");
 
-  if (ALLOWED_TYPES.has(extension as HaloDocumentType)) {
-    return extension as HaloDocumentType;
+  if (isHaloDocumentType(extension)) {
+    return extension;
   }
 
   return null;
@@ -499,10 +557,9 @@ function shouldReprocessStoredRecord(record: {
   );
 }
 
-async function normalizeStoredRecord(record: {
-  document: HaloDocumentRecord;
-  chunks: HaloDocumentChunk[];
-}) {
+async function normalizeStoredRecord(value: unknown) {
+  const record = validateStoredRecord(value);
+
   if (!shouldReprocessStoredRecord(record)) {
     return normalizeRecord(record);
   }
@@ -742,10 +799,15 @@ function scoreDocumentMetadata(document: HaloDocumentRecord, question: string) {
 }
 
 async function readRecord(id: string) {
-  const raw = await readFile(recordPath(id), "utf8");
-  return normalizeStoredRecord(
-    JSON.parse(raw) as { document: HaloDocumentRecord; chunks: HaloDocumentChunk[] }
-  );
+  const requestedId = assertSafeId(id);
+  const raw = await readFile(recordPath(requestedId), "utf8");
+  const record = validateStoredRecord(JSON.parse(raw) as unknown);
+
+  if (record.document.id !== requestedId) {
+    throw new HaloDocumentError("Stored document id does not match requested id.");
+  }
+
+  return normalizeStoredRecord(record);
 }
 
 export function getDocumentsStorageRoot() {
@@ -830,15 +892,8 @@ export async function listDocuments() {
     entries
       .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
       .map(async (entry) => {
-        const raw = await readFile(path.join(INDEX_DIR, entry.name), "utf8");
-        return (
-          await normalizeStoredRecord(
-          JSON.parse(raw) as {
-            document: HaloDocumentRecord;
-            chunks: HaloDocumentChunk[];
-          }
-          )
-        ).document;
+        const id = assertSafeId(entry.name.slice(0, -".json".length));
+        return (await readRecord(id)).document;
       })
   );
 
