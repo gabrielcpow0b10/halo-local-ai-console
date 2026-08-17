@@ -6,7 +6,13 @@ HALO Console is a local-first AI workbench for chatting with Ollama models from 
 > Related repos: [Toolkit](https://github.com/gabrielcpow0b10/homelab-agentops) ·
 > [Control Plane](https://github.com/gabrielcpow0b10/homelab-agentops-control-plane) · [Mini Lab](https://github.com/gabrielcpow0b10/halo-light-mini-lab)
 
-This repository is published as a sanitized `v0.8 Public Preview`. It is intended to show the architecture, interface shape, and local-first product direction without including private runtime data, uploaded files, secrets, screenshots, or environment-specific configuration.
+This repository is published as a sanitized `v0.8 Public Preview`. It is intended to show the architecture, interface shape, and local-first product direction without including private runtime data, uploaded private files, secrets, or environment-specific configuration; only approved public-safe screenshots are included.
+
+## Public Preview
+
+![HALO Console public preview](public/halo-console-public-preview.png)
+
+This screenshot uses synthetic public-demo data only. It demonstrates local chat, local document context, selected learning context, and read-only Runtime Bridge integration; no private runtime data is shown.
 
 ## v0.8 Public Preview
 
