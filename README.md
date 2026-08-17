@@ -84,13 +84,19 @@ Security boundaries: [docs/SECURITY_BOUNDARIES.md](docs/SECURITY_BOUNDARIES.md)
 
 HALO Console keeps the browser, API routes, model routing, and model runtime separated:
 
-```text
-Browser
-  -> HALO Console UI
-  -> HALO API Layer
-  -> Model Router
-  -> Ollama
-  -> Local Models
+```mermaid
+flowchart LR
+    Browser["Browser"] --> UI["HALO Console UI"]
+    UI --> API["HALO API Layer"]
+
+    API --> Router["Model Router"]
+    Router --> Ollama["Ollama"]
+    Ollama --> Models["Local Models"]
+
+    Docs["Local Documents"] --> API
+    Learning["Selected Learning"] --> API
+    Runtime["Read-only Runtime Bridge"] --> API
+    Search["Web Search<br/>optional / disabled by default"] -.-> API
 ```
 
 At a code level:
