@@ -30,7 +30,7 @@ jobs:
         run: npm ci
 
       - name: Run dependency audit
-        run: npm audit --audit-level=high
+        run: npm run audit:security
 
       - name: Check env contract
         run: npm run check:env
