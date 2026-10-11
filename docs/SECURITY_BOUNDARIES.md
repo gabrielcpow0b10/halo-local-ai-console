@@ -55,6 +55,14 @@ The HALO API Layer exposes only narrow route handlers:
 
 It does not expose a generic proxy, command runner, file reader, admin endpoint, or arbitrary local network scanner.
 
+### HTTP Request Boundary
+
+Network deployment and listener exposure remain controlled by the operator and Tailscale. All `/api` requests enforce trusted `Host` semantics: loopback, RFC1918, and CGNAT/Tailscale IP literals are accepted by default, while trusted named hosts must be explicitly configured.
+
+Browser mutation requests with an `Origin` must match the validated request host. Mutation requests are also constrained to JSON, except for the document upload endpoint's multipart form data. Native and CLI clients may omit `Origin` after passing Host validation.
+
+These checks are defense in depth against cross-origin mutation, CSRF-like requests, untrusted Host headers, and DNS-rebinding-style Host/Origin combinations. They do not replace Tailscale or other operator-managed network access controls.
+
 ## Shell Execution
 
 HALO Console does not execute shell commands from the web application.
