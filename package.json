@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "audit:security": "node scripts/check-dependency-audit.mjs",
     "check:env": "node scripts/check-env-contract.mjs",
     "start": "next start",
     "lint": "eslint",
@@ -13,7 +14,7 @@
     "test:coverage": "vitest run --coverage"
   },
   "dependencies": {
-    "next": "16.3.0",
+    "next": "16.4.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },
@@ -22,12 +23,12 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@vitest/coverage-v8": "4.1.10",
+    "@vitest/coverage-v8": "4.1.11",
     "eslint": "^9",
-    "eslint-config-next": "16.3.0",
+    "eslint-config-next": "16.4.0",
     "tailwindcss": "^4",
     "typescript": "^5",
-    "vitest": "^4.1.10"
+    "vitest": "4.1.11"
   },
   "overrides": {
     "postcss": "8.5.23"
