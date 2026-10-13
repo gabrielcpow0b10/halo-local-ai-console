@@ -57,7 +57,7 @@ curl http://localhost:3030/api/documents/list
 curl http://localhost:3030/api/memory/list
 ```
 
-A public-safe [sample document](docs/examples/sample-document.md) is available to upload through the Documents panel when trying the local document/RAG workflow. Enable `Use Local Docs` and ask a question about Northstar Observatory.
+A public-safe [sample document](docs/examples/sample-document.md) is available to upload through the Documents panel when trying the local document/RAG workflow. Enable `Use Local Docs` and ask a question about Northstar Observatory. See the [examples guide](docs/examples/README.md) for upload steps, retrieval questions, and expected answers.
 
 ## v0.8 Public Preview
 
