@@ -22,7 +22,6 @@ Current public preview scope:
 - Improve missing-model and unreachable-Ollama error states in the UI.
 - Add clearer document extraction status messages for partial and low-quality documents.
 - Add import/export controls for sanitized learning notes.
-- Add stronger public examples using generic sample documents only.
 
 ## Documents And Retrieval
 
