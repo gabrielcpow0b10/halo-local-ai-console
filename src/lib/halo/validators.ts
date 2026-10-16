@@ -6,9 +6,7 @@ export function isHaloChatMessage(value: unknown): value is HaloChatMessage {
   const message = value as Partial<HaloChatMessage>;
 
   return (
-    (message.role === "system" ||
-      message.role === "user" ||
-      message.role === "assistant") &&
+    (message.role === "user" || message.role === "assistant") &&
     typeof message.content === "string"
   );
 }
