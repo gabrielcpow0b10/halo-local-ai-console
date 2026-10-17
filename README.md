@@ -42,6 +42,8 @@ Start HALO Console:
 npm run dev -- -p 3030
 ```
 
+HALO Console binds to loopback (`127.0.0.1`) by default for both `npm run dev` and `npm start`. Remote or Tailnet exposure is an explicit operator deployment choice and must use an operator-controlled bind or proxy configuration.
+
 Open:
 
 ```text

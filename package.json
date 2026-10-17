@@ -3,11 +3,11 @@
   "version": "0.8.1",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --hostname 127.0.0.1",
     "build": "next build",
     "audit:security": "node scripts/check-dependency-audit.mjs",
     "check:env": "node scripts/check-env-contract.mjs",
-    "start": "next start",
+    "start": "next start --hostname 127.0.0.1",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
