@@ -57,11 +57,13 @@ It does not expose a generic proxy, command runner, file reader, admin endpoint,
 
 ### HTTP Request Boundary
 
-Network deployment and listener exposure remain controlled by the operator and Tailscale. All `/api` requests enforce trusted `Host` semantics: loopback, RFC1918, and CGNAT/Tailscale IP literals are accepted by default, while trusted named hosts must be explicitly configured.
+Repository startup defaults (`npm run dev` and `npm start`) bind to loopback (`127.0.0.1`). An operator may explicitly expose HALO through Tailscale or another private deployment layer using an operator-controlled bind or proxy configuration. Network deployment and listener exposure remain the operator's responsibility.
+
+All `/api` requests enforce trusted `Host` semantics: loopback, RFC1918, and CGNAT/Tailscale IP literals are accepted by default, while trusted named hosts must be explicitly configured.
 
 Browser mutation requests with an `Origin` must match the validated request host. Mutation requests are also constrained to JSON, except for the document upload endpoint's multipart form data. Native and CLI clients may omit `Origin` after passing Host validation.
 
-These checks are defense in depth against cross-origin mutation, CSRF-like requests, untrusted Host headers, and DNS-rebinding-style Host/Origin combinations. They do not replace Tailscale or other operator-managed network access controls.
+These checks are defense in depth against cross-origin mutation, CSRF-like requests, untrusted Host headers, and DNS-rebinding-style Host/Origin combinations. Host validation is not authentication. These checks do not replace Tailscale or other operator-managed network access controls.
 
 ## Shell Execution
 
