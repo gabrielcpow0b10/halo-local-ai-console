@@ -4,7 +4,7 @@ import {
   formatSelectedLearningContext,
   getSelectedLearningMemories,
 } from "@/lib/halo/learning-memory";
-import { queryDocuments } from "@/lib/halo/documents";
+import { HaloDocumentError, queryDocuments } from "@/lib/halo/documents";
 import { searchWeb, type SearchResponse } from "@/lib/halo/search";
 import { HALO_CONSOLE_SYSTEM_PROMPT } from "@/lib/halo/system-prompts";
 import { readRuntimeReport } from "@/lib/halo/runtime-bridge-reader";
@@ -263,11 +263,21 @@ export async function POST(req: Request) {
         );
       }
 
-      const localDocumentResult = await queryDocuments(
-        latestQuestion,
-        4,
-        selectedDocumentScopeEnabled ? selectedDocumentIds : undefined
-      );
+      let localDocumentResult;
+      try {
+        localDocumentResult = await queryDocuments(
+          latestQuestion,
+          4,
+          selectedDocumentScopeEnabled ? selectedDocumentIds : undefined
+        );
+      } catch (error) {
+        if (error instanceof HaloDocumentError) {
+          return new Response("Invalid local document query. Use at least 2 characters.", {
+            status: 400,
+          });
+        }
+        throw error;
+      }
       const localDocumentStatus =
         localDocumentResult.matches.length > 0
           ? "used"
