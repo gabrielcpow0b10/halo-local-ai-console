@@ -10,10 +10,10 @@ export default defineConfig({
       reporter: ["text", "json-summary"],
       reportsDirectory: "coverage",
       thresholds: {
-        statements: 63,
-        branches: 58,
-        functions: 65,
-        lines: 64,
+        statements: 76,
+        branches: 72,
+        functions: 75,
+        lines: 76,
       },
       include: ["src/lib/halo/**/*.ts", "src/app/api/**/route.ts"],
       exclude: [
