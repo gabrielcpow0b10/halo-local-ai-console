@@ -129,6 +129,8 @@ type MessageContentPart =
   | { type: "text"; text: string }
   | { type: "code"; language: string; code: string };
 
+class ChatRequestError extends Error {}
+
 const STORAGE_KEY = "halo-console-v0.2-sessions";
 const ACTIVE_KEY = "halo-console-v0.2-active-session";
 const DEFAULT_MODEL = "qwen3:4b";
@@ -1445,6 +1447,10 @@ export default function Home() {
       });
 
       if (!response.ok || !response.body) {
+        if (response.status >= 400 && response.status < 500) {
+          const detail = (await response.text()).slice(0, 300).trim();
+          if (detail) throw new ChatRequestError(detail);
+        }
         throw new Error("Chat request failed");
       }
 
@@ -1566,14 +1572,16 @@ export default function Home() {
           })
         );
       }
-    } catch {
+    } catch (error) {
       if (!controller.signal.aborted) {
         updateSession(sessionId, (session) => {
           const updatedMessages = [...session.messages];
           updatedMessages[updatedMessages.length - 1] = {
             role: "assistant",
             content:
-              "Error: HALO Console could not reach Ollama. Check that Ollama is running on the local AI node.",
+              error instanceof ChatRequestError
+                ? `Error: ${error.message}`
+                : "Error: HALO Console could not reach Ollama. Check that Ollama is running on the local AI node.",
           };
 
           return {
