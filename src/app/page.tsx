@@ -1,5 +1,7 @@
 "use client";
 
+import { ChatMarkdown } from "@/components/chat-markdown";
+
 import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -125,9 +127,6 @@ type MemoryTypeFilter = MemoryEntry["type"] | "all";
 
 type HealthState = "checking" | "online" | "offline";
 type WebSearchState = "checking" | "configured" | "not-configured";
-type MessageContentPart =
-  | { type: "text"; text: string }
-  | { type: "code"; language: string; code: string };
 
 class ChatRequestError extends Error {}
 
@@ -483,60 +482,6 @@ function qualityLabel(status?: ChunkQualityStatus) {
   }
 
   return "Readable";
-}
-
-function parseFencedCodeBlocks(content: string): MessageContentPart[] {
-  const parts: MessageContentPart[] = [];
-  const fencePattern = /```([^\n`]*)\n?([\s\S]*?)(?:```|$)/g;
-  let cursor = 0;
-  let match: RegExpExecArray | null;
-
-  while ((match = fencePattern.exec(content)) !== null) {
-    if (match.index > cursor) {
-      parts.push({ type: "text", text: content.slice(cursor, match.index) });
-    }
-
-    const language = match[1].trim().split(/\s+/)[0];
-
-    parts.push({
-      type: "code",
-      language,
-      code: match[2],
-    });
-
-    cursor = fencePattern.lastIndex;
-  }
-
-  if (cursor < content.length) {
-    parts.push({ type: "text", text: content.slice(cursor) });
-  }
-
-  return parts.length > 0 ? parts : [{ type: "text", text: content }];
-}
-
-function renderMessageContent(content: string) {
-  if (!content) return "HALO is thinking...";
-
-  return parseFencedCodeBlocks(content).map((part, index) => {
-    if (part.type === "text") {
-      return (
-        <span className="message-text" key={`text-${index}`}>
-          {part.text}
-        </span>
-      );
-    }
-
-    return (
-      <div className="message-code-block" key={`code-${index}`}>
-        {part.language ? (
-          <div className="message-code-language">{part.language}</div>
-        ) : null}
-        <pre>
-          <code>{part.code}</code>
-        </pre>
-      </div>
-    );
-  });
 }
 
 function renderLocalDocumentSources(localDocs: NonNullable<ChatMessage["localDocs"]>) {
@@ -2332,7 +2277,7 @@ export default function Home() {
                   {message.role === "user" ? "You" : "HALO"}
                 </div>
                 <div className="message-content">
-                  {renderMessageContent(message.content)}
+                  <ChatMarkdown content={message.content} />
                 </div>
                 {message.role === "assistant" && message.localDocs?.enabled ? (
                   renderLocalDocumentSources(message.localDocs)
