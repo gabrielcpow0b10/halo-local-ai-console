@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as documents from "@/lib/halo/documents";
 import * as search from "@/lib/halo/search";
+import { HALO_MODELS } from "@/lib/halo/types";
 import {
   MAX_CHAT_MESSAGES,
   MAX_CHAT_MESSAGE_CHARS,
@@ -84,6 +85,49 @@ function chatRequest(options: Record<string, unknown> = {}) {
     }),
   });
 }
+
+describe("POST /api/chat model validation", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn().mockImplementation(() =>
+      Promise.resolve(new Response('{"message":{"content":"Hello"}}\n'))
+    ));
+  });
+
+  it.each(Object.entries(HALO_MODELS))("accepts the %s model", async (_tier, model) => {
+    const response = await POST(chatRequest({ router: false, model }));
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("Hello");
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).model).toBe(model);
+  });
+
+  it.each(["unknown-model", "", "quick"])("rejects unsupported model %j without calling Ollama", async (model) => {
+    const response = await POST(chatRequest({ router: false, model }));
+
+    expect(response.status).toBe(400);
+    expect(await response.text()).toBe("Unsupported model.");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("falls back to quick when the model is missing", async () => {
+    const response = await POST(chatRequest({ router: false }));
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("Hello");
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).model).toBe(HALO_MODELS.quick);
+  });
+
+  it("preserves router selection when an unsupported manual model is supplied", async () => {
+    const response = await POST(chatRequest({ router: true, model: "unknown-model" }));
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("Hello");
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string).model).toBe(HALO_MODELS.daily);
+  });
+});
 
 function expectDocumentHeaders(
   response: Response,
@@ -203,7 +247,7 @@ describe("POST /api/chat regressions", () => {
     vi.mocked(fetch).mockResolvedValue(new Response('{"message":{"content":"Nightly."}}\n'));
     const response = await POST(chatRequest({
       localDocuments: true, useSelectedDocuments: selected,
-      selectedDocumentIds: [selectedId, "invalid", null], model: "test-model",
+      selectedDocumentIds: [selectedId, "invalid", null], model: HALO_MODELS.daily,
     }));
     expect(response.status).toBe(200);
     expect(await response.text()).toBe("Nightly.");
@@ -215,7 +259,7 @@ describe("POST /api/chat regressions", () => {
     const init = vi.mocked(fetch).mock.calls[0][1]!;
     const payload = JSON.parse(init.body as string);
     expect(init.method).toBe("POST");
-    expect(payload).toMatchObject({ model: "test-model", stream: true, options: { temperature: 0.4 } });
+    expect(payload).toMatchObject({ model: HALO_MODELS.daily, stream: true, options: { temperature: 0.4 } });
     expect(payload.messages[1]).toEqual({ role: "system", content: expect.stringContaining("LOCAL DOCUMENT CONTEXT") });
     expect(payload.messages[1].content).toContain("SOURCE 1: backup-guide.md, chunk 2");
     expect(payload.messages[1].content).toContain("Document title: Backup guide");

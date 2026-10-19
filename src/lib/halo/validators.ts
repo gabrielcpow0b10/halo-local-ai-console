@@ -1,4 +1,9 @@
 import type { HaloChatMessage, HaloRouterRequest } from "./types";
+import { HALO_MODELS } from "./types";
+
+export function isHaloModel(value: unknown): value is (typeof HALO_MODELS)[keyof typeof HALO_MODELS] {
+  return Object.values(HALO_MODELS).some((model) => model === value);
+}
 
 export function isHaloChatMessage(value: unknown): value is HaloChatMessage {
   if (!value || typeof value !== "object") return false;

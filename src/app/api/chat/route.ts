@@ -11,7 +11,7 @@ import { readRuntimeReport } from "@/lib/halo/runtime-bridge-reader";
 import { RUNTIME_REPORT_ENV } from "@/lib/halo/runtime-bridge";
 import { HALO_MODELS } from "@/lib/halo/types";
 import type { HaloChatMessage } from "@/lib/halo/types";
-import { isHaloChatMessage } from "@/lib/halo/validators";
+import { isHaloChatMessage, isHaloModel } from "@/lib/halo/validators";
 
 export const runtime = "nodejs";
 
@@ -210,6 +210,10 @@ export async function POST(req: Request) {
     }
 
     const shouldUseRouter = body.router === true;
+    if (!shouldUseRouter && typeof body.model === "string" && !isHaloModel(body.model)) {
+      return new Response("Unsupported model.", { status: 400 });
+    }
+
     const webSearchEnabled = body.webSearch === true;
     const localDocumentsEnabled = body.localDocuments === true;
     const selectedDocumentScopeEnabled = body.useSelectedDocuments === true;
