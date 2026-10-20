@@ -86,6 +86,83 @@ function chatRequest(options: Record<string, unknown> = {}) {
   });
 }
 
+describe("POST /api/chat cancellation", () => {
+  it("passes the incoming request signal to Ollama", async () => {
+    const request = chatRequest();
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response('{"message":{"content":"Hello"}}\n')
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const response = await POST(request);
+
+    expect(fetchMock.mock.calls[0][1].signal).toBe(request.signal);
+    expect(await response.text()).toBe("Hello");
+  });
+
+  it("cancels the Ollama reader during a pending read without flushing buffered text or logging", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const cancel = vi.fn();
+    const upstream = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(
+          '{"message":{"content":"Hello"}}\n{"message":{"content":"buffered"}}'
+        ));
+      },
+      cancel,
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(upstream)));
+    const response = await POST(chatRequest());
+    const reader = response.body!.getReader();
+    expect(new TextDecoder().decode((await reader.read()).value)).toBe("Hello");
+
+    await reader.cancel("Client stopped generation");
+
+    expect(cancel).toHaveBeenCalledExactlyOnceWith("Client stopped generation");
+    expect(await reader.read()).toEqual({ done: true, value: undefined });
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it("does not log when the request aborts while fetching Ollama", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const controller = new AbortController();
+    const request = new Request(chatRequest(), { signal: controller.signal });
+    vi.stubGlobal("fetch", vi.fn().mockImplementation((_url, init: RequestInit) =>
+      new Promise((_resolve, reject) => {
+        init.signal!.addEventListener("abort", () => reject(init.signal!.reason), { once: true });
+        controller.abort();
+      })
+    ));
+
+    await POST(request);
+
+    expect(request.signal.aborted).toBe(true);
+    expect(log).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("preserves stream errors and only logs unexpected failures (aborted: %s)", async (aborted) => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    const controller = new AbortController();
+    const request = new Request(chatRequest(), { signal: controller.signal });
+    let upstreamController!: ReadableStreamDefaultController;
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(new ReadableStream({
+      start(controller) { upstreamController = controller; },
+    }))));
+    const response = await POST(request);
+    const error = aborted ? new DOMException("Client disconnected", "AbortError") : new Error("Upstream failed");
+
+    if (aborted) controller.abort();
+    upstreamController.error(error);
+
+    await expect(response.text()).rejects.toBe(error);
+    if (aborted) {
+      expect(log).not.toHaveBeenCalled();
+    } else {
+      expect(log).toHaveBeenCalledWith("[HALO /api/chat]", "Ollama stream failed", expect.objectContaining({ error }));
+    }
+  });
+});
+
 describe("POST /api/chat model validation", () => {
   beforeEach(() => {
     vi.stubGlobal("fetch", vi.fn().mockImplementation(() =>

@@ -362,6 +362,7 @@ export async function POST(req: Request) {
 
     const ollamaRes = await fetch(`${OLLAMA_URL}/api/chat`, {
       method: "POST",
+      signal: req.signal,
       headers: {
         "Content-Type": "application/json",
       },
@@ -406,14 +407,17 @@ export async function POST(req: Request) {
       }
     }
 
+    const reader = ollamaRes.body.getReader();
+    let cancelled = false;
+
     const stream = new ReadableStream({
       async start(controller) {
-        const reader = ollamaRes.body!.getReader();
         let buffer = "";
 
         try {
           while (true) {
             const { done, value } = await reader.read();
+            if (cancelled) return;
             if (done) break;
 
             buffer += decoder.decode(value, { stream: true });
@@ -428,8 +432,12 @@ export async function POST(req: Request) {
           buffer += decoder.decode();
           enqueueOllamaLine(controller, buffer);
         } catch (error) {
-          logChatError("Ollama stream failed", { error, model, ollamaUrl: OLLAMA_URL });
-          controller.error(error);
+          if (!cancelled) {
+            if (!req.signal.aborted) {
+              logChatError("Ollama stream failed", { error, model, ollamaUrl: OLLAMA_URL });
+            }
+            controller.error(error);
+          }
         } finally {
           try {
             controller.close();
@@ -437,6 +445,10 @@ export async function POST(req: Request) {
             // The stream may already be errored or closed by the client.
           }
         }
+      },
+      cancel(reason) {
+        cancelled = true;
+        return reader.cancel(reason);
       },
     });
 
@@ -450,7 +462,7 @@ export async function POST(req: Request) {
       },
     });
   } catch (error) {
-    logChatError("Chat route failed", error);
+    if (!req.signal.aborted) logChatError("Chat route failed", error);
     return new Response("HALO Console chat route failed", { status: 500 });
   }
 }
