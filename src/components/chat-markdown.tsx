@@ -9,6 +9,7 @@ export function ChatMarkdown({ content }: { content: string }) {
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[[rehypeKatex, { trust: false, strict: "ignore" }]]}
       components={{
+        img: ({ alt }) => <span>{alt ? `[image blocked: ${alt}]` : "[image blocked]"}</span>,
         a: ({ href, children, title }) => (
           <a href={href} title={title} target="_blank" rel="noopener noreferrer">
             {children}
