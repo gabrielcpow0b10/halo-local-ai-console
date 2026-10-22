@@ -1,3 +1,5 @@
+import { isHaloModel } from "@/lib/halo/validators";
+
 export const runtime = "nodejs";
 
 const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://127.0.0.1:11434";
@@ -12,7 +14,7 @@ export async function GET() {
   const data = await res.json();
 
   return Response.json({
-    models: data.models?.map((model: { name: string; size: number; modified_at: string }) => ({
+    models: data.models?.filter((model: { name: string }) => isHaloModel(model.name)).map((model: { name: string; size: number; modified_at: string }) => ({
       name: model.name,
       size: model.size,
       modified_at: model.modified_at,
