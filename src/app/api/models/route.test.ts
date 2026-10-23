@@ -56,6 +56,15 @@ describe("GET /api/models", () => {
     expect(await response.json()).toEqual({ models: [approvedModel] });
   });
 
+  it("returns 502 when fetch fails to reach Ollama", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("fetch failed")));
+
+    const response = await GET();
+
+    expect(response.status).toBe(502);
+    expect(await response.json()).toEqual({ models: [], error: "Ollama is not reachable" });
+  });
+
   it("returns 502 when Ollama responds with a non-OK status", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 503 })));
 

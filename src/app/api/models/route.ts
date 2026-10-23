@@ -5,7 +5,12 @@ export const runtime = "nodejs";
 const OLLAMA_URL = process.env.OLLAMA_URL ?? "http://127.0.0.1:11434";
 
 export async function GET() {
-  const res = await fetch(`${OLLAMA_URL}/api/tags`, { cache: "no-store" });
+  let res: Response;
+  try {
+    res = await fetch(`${OLLAMA_URL}/api/tags`, { cache: "no-store" });
+  } catch {
+    return Response.json({ models: [], error: "Ollama is not reachable" }, { status: 502 });
+  }
 
   if (!res.ok) {
     return Response.json({ models: [], error: "Ollama is not reachable" }, { status: 502 });
