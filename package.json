@@ -38,6 +38,7 @@
   },
   "overrides": {
     "postcss": "8.5.23",
-    "katex": "$katex"
+    "katex": "$katex",
+    "zod": "^4.6.6"
   }
 }
